@@ -1,0 +1,56 @@
+import { ComboBox, Button } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { AppState, ConnectionBridge, ConnectionState } from "../globals.slint";
+
+export component ConnectionBar inherits Rectangle {
+    height: 48px;
+    background: Theme.bg-secondary;
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 12px;
+        alignment: start;
+        // Status LED (wrapped in a VerticalLayout to center it)
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                background: AppState.connection == ConnectionState.connected ? Theme.connected : Theme.disconnected;
+            }
+        }
+
+        // Port selector (placeholder - ComboBox needs string model)
+        Text {
+            text: ConnectionBridge.selected-port != "" ? ConnectionBridge.selected-port : "No port selected";
+            color: Theme.fg-primary;
+            vertical-alignment: center;
+        }
+
+        // Connect/Disconnect button
+        Button {
+            text: AppState.connection == ConnectionState.connected ? "Disconnect" : "Connect";
+            enabled: AppState.connection == ConnectionState.connected || AppState.connection == ConnectionState.disconnected;
+            clicked => {
+                if AppState.connection == ConnectionState.connected {
+                    ConnectionBridge.disconnect();
+                } else {
+                    ConnectionBridge.connect();
+                }
+            }
+        }
+
+        // Spacer
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        // Firmware version
+        Text {
+            text: AppState.firmware-version;
+            color: Theme.fg-secondary;
+            vertical-alignment: center;
+        }
+    }
+}

@@ -1,0 +1,32 @@
+import { Theme } from "../theme.slint";
+import { KeymapBridge, KeycapData } from "../globals.slint";
+import { KeyButton } from "key_button.slint";
+
+export component KeyboardView inherits Rectangle {
+    background: Theme.bg-surface;
+    border-radius: 8px;
+    min-height: 150px;
+    clip: true;
+
+    // Scale to fit: min(available / content) so it always fits
+    property <float> scale-x: self.width / KeymapBridge.content-width;
+    property <float> scale-y: self.height / KeymapBridge.content-height;
+    property <float> scale: min(root.scale-x, root.scale-y) * 0.95;
+    // Center offset
+    property <length> offset-x: (self.width - KeymapBridge.content-width * root.scale) / 2;
+    property <length> offset-y: (self.height - KeymapBridge.content-height * root.scale) / 2;
+
+    for keycap[idx] in KeymapBridge.keycaps : KeyButton {
+        x: root.offset-x + keycap.x * root.scale;
+        y: root.offset-y + keycap.y * root.scale;
+        width: keycap.w * root.scale;
+        height: keycap.h * root.scale;
+        scale: root.scale;
+        data: keycap;
+        clicked(key-index) => {
+            KeymapBridge.select-key(key-index);
+            KeymapBridge.selector-target = "keymap";
+            KeymapBridge.key-selector-open = true;
+        }
+    }
+}

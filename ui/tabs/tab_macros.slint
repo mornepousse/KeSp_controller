@@ -1,0 +1,162 @@
+import { Button, ComboBox, ScrollView, LineEdit } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { MacroBridge, AppState, ConnectionState, KeymapBridge } from "../globals.slint";
+
+export component TabMacros inherits Rectangle {
+    background: Theme.bg-primary;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // Header
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text: "Macros"; color: Theme.fg-primary; font-size: 20px; font-weight: 700; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            Button {
+                text: "Refresh";
+                enabled: AppState.connection == ConnectionState.connected;
+                clicked => { MacroBridge.refresh-macros(); }
+            }
+        }
+
+        // New macro builder
+        Rectangle {
+            background: Theme.bg-secondary;
+            border-radius: 8px;
+
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+
+                Text { text: "Add / Edit Macro"; color: Theme.accent-cyan; font-size: 13px; font-weight: 600; }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+
+                    Text { text: "Slot:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
+                    ComboBox {
+                        width: 60px;
+                        model: ["0","1","2","3","4","5","6","7","8","9"];
+                        current-index <=> MacroBridge.new-slot-idx;
+                    }
+                    Text { text: "Name:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
+                    LineEdit {
+                        horizontal-stretch: 1;
+                        text <=> MacroBridge.new-name;
+                        placeholder-text: "macro name";
+                    }
+                }
+
+                // Steps display
+                Text { text: "Steps:"; color: Theme.fg-secondary; font-size: 12px; }
+
+                // Show added steps as tags
+                HorizontalLayout {
+                    spacing: 4px;
+                    height: 30px;
+
+                    for step in MacroBridge.new-steps : Rectangle {
+                        width: self.preferred-width + 12px;
+                        preferred-width: step-text.preferred-width;
+                        height: 26px;
+                        border-radius: 4px;
+                        background: step.is-delay ? Theme.accent-orange : Theme.accent-purple;
+
+                        step-text := Text {
+                            text: step.label;
+                            color: Theme.fg-primary;
+                            font-size: 10px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    if MacroBridge.new-steps.length == 0 : Text {
+                        text: "(empty - add keys and delays below)";
+                        color: Theme.fg-secondary;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Action buttons
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+
+                    Button {
+                        text: "Add Key";
+                        clicked => {
+                            KeymapBridge.selector-target = "macro-step";
+                            KeymapBridge.key-selector-open = true;
+                        }
+                    }
+
+                    Button { text: "T 50ms"; clicked => { MacroBridge.add-delay-step(50); } }
+                    Button { text: "T 100ms"; clicked => { MacroBridge.add-delay-step(100); } }
+                    Button { text: "T 200ms"; clicked => { MacroBridge.add-delay-step(200); } }
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    Button { text: "Undo"; clicked => { MacroBridge.remove-last-step(); } }
+                    Button { text: "Clear"; clicked => { MacroBridge.clear-steps(); } }
+                }
+
+                // Save
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+
+                    Button {
+                        text: "Save Macro";
+                        enabled: AppState.connection == ConnectionState.connected;
+                        clicked => { MacroBridge.save-macro(); }
+                    }
+
+                    if MacroBridge.new-steps-text != "" : Text {
+                        text: MacroBridge.new-steps-text;
+                        color: Theme.fg-secondary;
+                        font-size: 10px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+            }
+        }
+
+        // Macro list
+        ScrollView {
+            vertical-stretch: 1;
+
+            VerticalLayout {
+                spacing: 4px;
+
+                if MacroBridge.macros.length == 0 : Text {
+                    text: "No macros configured";
+                    color: Theme.fg-secondary;
+                    font-size: 11px;
+                }
+
+                for macro in MacroBridge.macros : Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 4px;
+                    height: 36px;
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 8px;
+
+                        Text { text: "#" + macro.slot; color: Theme.accent-purple; font-size: 12px; vertical-alignment: center; width: 30px; }
+                        Text { text: macro.name; color: Theme.fg-primary; font-size: 12px; font-weight: 600; vertical-alignment: center; width: 100px; }
+                        Text { text: macro.steps; color: Theme.fg-secondary; font-size: 10px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                        Button { text: "Del"; clicked => { MacroBridge.delete-macro(macro.slot); } }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,332 @@
+import { Button, ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { StatsBridge, AppState, ConnectionState } from "../globals.slint";
+
+component BarChart inherits Rectangle {
+    in property <float> value; // 0-100
+    in property <string> label;
+    in property <color> bar-color: Theme.accent-purple;
+    height: 28px;
+
+    HorizontalLayout {
+        spacing: 8px;
+
+        Text {
+            width: 80px;
+            text: root.label;
+            color: Theme.fg-secondary;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+            background: Theme.bg-primary;
+            border-radius: 3px;
+
+            Rectangle {
+                x: 0;
+                width: parent.width * clamp(root.value / 100, 0, 1);
+                height: 100%;
+                background: root.bar-color;
+                border-radius: 3px;
+            }
+        }
+
+        Text {
+            width: 50px;
+            text: round(root.value * 10) / 10 + "%";
+            color: Theme.fg-primary;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component TabStats inherits Rectangle {
+    background: Theme.bg-primary;
+
+    ScrollView {
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // Header
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: "Typing Statistics";
+                color: Theme.fg-primary;
+                font-size: 20px;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Button {
+                text: "Refresh";
+                enabled: AppState.connection == ConnectionState.connected;
+                clicked => { StatsBridge.refresh-stats(); }
+            }
+        }
+
+        // Content in two columns
+        HorizontalLayout {
+            spacing: 12px;
+            vertical-stretch: 1;
+
+            // Left column
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 12px;
+
+                // Hand balance
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    vertical-stretch: 0;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+
+                        Text {
+                            text: "Hand Balance";
+                            color: Theme.accent-cyan;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+
+                        HorizontalLayout {
+                            spacing: 4px;
+                            // Left bar
+                            Rectangle {
+                                horizontal-stretch: StatsBridge.hand-balance.left-pct > 0 ? round(StatsBridge.hand-balance.left-pct) : 1;
+                                height: 24px;
+                                background: Theme.accent-purple;
+                                border-radius: 3px;
+                                Text {
+                                    text: "L " + round(StatsBridge.hand-balance.left-pct) + "%";
+                                    color: Theme.fg-primary;
+                                    font-size: 11px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            // Right bar
+                            Rectangle {
+                                horizontal-stretch: StatsBridge.hand-balance.right-pct > 0 ? round(StatsBridge.hand-balance.right-pct) : 1;
+                                height: 24px;
+                                background: Theme.accent-green;
+                                border-radius: 3px;
+                                Text {
+                                    text: "R " + round(StatsBridge.hand-balance.right-pct) + "%";
+                                    color: Theme.bg-primary;
+                                    font-size: 11px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "Total: " + StatsBridge.hand-balance.total + " presses";
+                            color: Theme.fg-secondary;
+                            font-size: 11px;
+                        }
+                    }
+                }
+
+                // Bigrams
+                if StatsBridge.bigrams.total > 0 : Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    vertical-stretch: 0;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+
+                        Text {
+                            text: "Bigram Analysis";
+                            color: Theme.accent-cyan;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+
+                        BarChart {
+                            label: "Alt Hand";
+                            value: StatsBridge.bigrams.alt-hand-pct;
+                            bar-color: Theme.accent-green;
+                        }
+                        BarChart {
+                            label: "Same Hand";
+                            value: StatsBridge.bigrams.same-hand-pct;
+                            bar-color: Theme.accent-orange;
+                        }
+                        BarChart {
+                            label: "SFB";
+                            value: StatsBridge.bigrams.sfb-pct;
+                            bar-color: Theme.accent-red;
+                        }
+                    }
+                }
+
+                // Finger load
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    vertical-stretch: 1;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+
+                        Text {
+                            text: "Finger Load";
+                            color: Theme.accent-cyan;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+
+                        for finger in StatsBridge.finger-load : BarChart {
+                            label: finger.name;
+                            value: finger.pct;
+                            bar-color: Theme.accent-orange;
+                        }
+                    }
+                }
+            }
+
+            // Right column
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 12px;
+
+                // Row usage
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    vertical-stretch: 0;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+
+                        Text {
+                            text: "Row Usage";
+                            color: Theme.accent-cyan;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+
+                        for row in StatsBridge.row-usage : BarChart {
+                            label: row.name;
+                            value: row.pct;
+                            bar-color: Theme.accent-green;
+                        }
+                    }
+                }
+
+                // Top keys
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    vertical-stretch: 1;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+
+                        Text {
+                            text: "Top Keys";
+                            color: Theme.accent-cyan;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+
+                        for key in StatsBridge.top-keys : HorizontalLayout {
+                            height: 22px;
+                            spacing: 8px;
+
+                            Text {
+                                width: 80px;
+                                text: key.name;
+                                color: Theme.fg-primary;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                width: 60px;
+                                text: key.finger;
+                                color: Theme.fg-secondary;
+                                font-size: 10px;
+                                vertical-alignment: center;
+                            }
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                background: Theme.bg-primary;
+                                border-radius: 3px;
+                                Rectangle {
+                                    x: 0;
+                                    width: parent.width * clamp(key.pct / 20, 0, 1);
+                                    height: 100%;
+                                    background: Theme.accent-yellow;
+                                    border-radius: 3px;
+                                }
+                            }
+                            Text {
+                                width: 50px;
+                                text: key.count;
+                                color: Theme.fg-primary;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                                horizontal-alignment: right;
+                            }
+                        }
+                    }
+                }
+
+                // Dead keys
+                if StatsBridge.dead-keys.length > 0 : Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    vertical-stretch: 0;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+
+                        Text {
+                            text: "Dead Keys (never pressed)";
+                            color: Theme.accent-red;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+
+                        HorizontalLayout {
+                            spacing: 4px;
+
+                            for dk in StatsBridge.dead-keys : Rectangle {
+                                width: self.preferred-width + 12px;
+                                preferred-width: dk-text.preferred-width;
+                                height: 22px;
+                                background: Theme.bg-primary;
+                                border-radius: 3px;
+
+                                dk-text := Text {
+                                    text: dk;
+                                    color: Theme.accent-red;
+                                    font-size: 10px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    }
+}

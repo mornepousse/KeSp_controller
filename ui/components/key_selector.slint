@@ -1,0 +1,271 @@
+import { LineEdit, Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { KeySelectorBridge, KeymapBridge, KeyEntry, KeycapData } from "../globals.slint";
+import { KeyButton } from "key_button.slint";
+
+component KeyTile inherits Rectangle {
+    in property <string> label;
+    in property <int> code;
+    callback picked(int);
+
+    width: 52px;
+    height: 30px;
+    border-radius: 4px;
+    background: ta.has-hover ? Theme.accent-purple : Theme.button-bg;
+
+    Text {
+        text: root.label;
+        color: Theme.fg-primary;
+        font-size: 11px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ta := TouchArea {
+        clicked => { root.picked(root.code); }
+        mouse-cursor: pointer;
+    }
+}
+
+component SectionLabel inherits Text {
+    color: Theme.accent-cyan;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+component KeySection inherits VerticalLayout {
+    in property <string> title;
+    in property <[KeyEntry]> keys;
+    in property <int> cols: 7;
+    callback picked(int);
+
+    property <length> tile-w: 55px;
+    property <length> tile-h: 30px;
+    property <length> gap: 3px;
+
+    spacing: 3px;
+
+    if keys.length > 0 : SectionLabel { text: root.title; }
+    if keys.length > 0 : Rectangle {
+        height: (Math.ceil(keys.length / root.cols) ) * (root.tile-h + root.gap);
+
+        for key[idx] in root.keys : KeyTile {
+            x: mod(idx, root.cols) * (root.tile-w + root.gap);
+            y: floor(idx / root.cols) * (root.tile-h + root.gap);
+            width: root.tile-w;
+            label: key.name;
+            code: key.code;
+            picked(c) => { root.picked(c); }
+        }
+    }
+}
+
+export component KeySelector inherits Rectangle {
+    visible: KeymapBridge.key-selector-open;
+    background: #000000aa;
+
+    TouchArea { clicked => { KeymapBridge.key-selector-open = false; } }
+
+    function pick(code: int) {
+        KeySelectorBridge.select-keycode(code);
+        KeymapBridge.key-selector-open = false;
+    }
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(480px, parent.width - 40px);
+        height: min(520px, parent.height - 40px);
+        background: Theme.bg-primary;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: Theme.accent-purple;
+        clip: true;
+
+        TouchArea { }
+
+        VerticalLayout {
+            padding: 14px;
+            spacing: 8px;
+
+            // Header
+            HorizontalLayout {
+                
+                Text { text: "Select Key"; color: Theme.fg-primary; font-size: 16px; font-weight: 700; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; }
+                Rectangle {
+                    width: 26px; height: 26px; border-radius: 4px;
+                    background: close-ta.has-hover ? Theme.accent-red : Theme.button-bg;
+                    Text { text: "X"; color: Theme.fg-primary; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    close-ta := TouchArea { clicked => { KeymapBridge.key-selector-open = false; } mouse-cursor: pointer; }
+                }
+            }
+
+            // Keyboard mode for combo key picking
+            property <bool> keyboard-mode: KeymapBridge.selector-target == "combo-key1" || KeymapBridge.selector-target == "combo-key2";
+
+            if keyboard-mode : Text {
+                text: "Click a key on the keyboard:";
+                color: Theme.fg-secondary;
+                font-size: 12px;
+            }
+
+            if keyboard-mode : Rectangle {
+                vertical-stretch: 1;
+                background: Theme.bg-surface;
+                border-radius: 8px;
+                clip: true;
+
+                property <float> kb-scale-x: self.width / KeymapBridge.content-width;
+                property <float> kb-scale-y: self.height / KeymapBridge.content-height;
+                property <float> kb-scale: min(kb-scale-x, kb-scale-y) * 0.95;
+                property <length> kb-offset-x: (self.width - KeymapBridge.content-width * kb-scale) / 2;
+                property <length> kb-offset-y: (self.height - KeymapBridge.content-height * kb-scale) / 2;
+
+                for keycap[idx] in KeymapBridge.keycaps : KeyButton {
+                    x: parent.kb-offset-x + keycap.x * parent.kb-scale;
+                    y: parent.kb-offset-y + keycap.y * parent.kb-scale;
+                    width: keycap.w * parent.kb-scale;
+                    height: keycap.h * parent.kb-scale;
+                    scale: parent.kb-scale;
+                    data: keycap;
+                    clicked(key-index) => {
+                        KeymapBridge.select-key(key-index);
+                        // The dispatch in main.rs handles combo-key1/combo-key2
+                        KeySelectorBridge.select-keycode(0); // trigger dispatch
+                        KeymapBridge.key-selector-open = false;
+                    }
+                }
+            }
+
+            // Normal mode: search + key grid
+            if !keyboard-mode : LineEdit {
+                placeholder-text: "Search...";
+                text <=> KeySelectorBridge.search-text;
+                edited(text) => { KeySelectorBridge.apply-filter(text); }
+            }
+
+            if !keyboard-mode : ScrollView {
+                vertical-stretch: 1;
+
+                VerticalLayout {
+                    spacing: 6px;
+                    padding-right: 8px;
+
+                    KeySection { title: "Letters"; keys: KeySelectorBridge.cat-letters; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Numbers"; keys: KeySelectorBridge.cat-numbers; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Modifiers"; keys: KeySelectorBridge.cat-modifiers; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Navigation"; keys: KeySelectorBridge.cat-nav; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Function Keys"; keys: KeySelectorBridge.cat-function; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Symbols"; keys: KeySelectorBridge.cat-symbols; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Layers"; keys: KeySelectorBridge.cat-layers; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Special / BT / Media"; keys: KeySelectorBridge.cat-special; picked(c) => { root.pick(c); } }
+                    KeySection { title: "Tap Dance / Macros"; keys: KeySelectorBridge.cat-td-macro; picked(c) => { root.pick(c); } }
+
+                    // Mod-Tap builder
+                    SectionLabel { text: "Mod-Tap"; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        height: 32px;
+                        Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                        mt-mod := ComboBox {
+                            width: 80px;
+                            model: ["Ctrl", "Shift", "Alt", "GUI", "RCtrl", "RShift", "RAlt", "RGUI"];
+                            current-index: 1;
+                        }
+                        Text { text: "Key:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                        mt-key := ComboBox {
+                            width: 70px;
+                            model: ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","1","2","3","4","5","6","7","8","9","0","Space","Enter","Esc","Tab","Bksp"];
+                            current-index: 0;
+                        }
+                        Text {
+                            text: "= MT " + mt-mod.current-value + " " + mt-key.current-value;
+                            color: Theme.accent-green;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                        }
+                        Button {
+                            text: "Set";
+                            clicked => {
+                                KeySelectorBridge.apply-mt(mt-mod.current-index, mt-key.current-index);
+                                KeymapBridge.key-selector-open = false;
+                            }
+                        }
+                    }
+
+                    // Layer-Tap builder
+                    SectionLabel { text: "Layer-Tap"; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        height: 32px;
+                        Text { text: "Layer:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                        lt-layer := ComboBox {
+                            width: 50px;
+                            model: ["0","1","2","3","4","5","6","7","8","9"];
+                            current-index: 1;
+                        }
+                        Text { text: "Key:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                        lt-key := ComboBox {
+                            width: 80px;
+                            model: ["Space","Enter","Esc","Bksp","Tab","A","B","C","D","E"];
+                            current-index: 0;
+                        }
+                        Text {
+                            text: "= LT " + lt-layer.current-value + " " + lt-key.current-value;
+                            color: Theme.accent-green;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                        }
+                        Button {
+                            text: "Set";
+                            clicked => {
+                                KeySelectorBridge.apply-lt(lt-layer.current-index, lt-key.current-index);
+                                KeymapBridge.key-selector-open = false;
+                            }
+                        }
+                    }
+
+                    // Hex input
+                    SectionLabel { text: "Hex Code"; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        height: 32px;
+                        Text { text: "0x"; color: Theme.accent-orange; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+                        hex-edit := LineEdit {
+                            width: 80px;
+                            text <=> KeySelectorBridge.hex-input;
+                            placeholder-text: "5204";
+                            edited(text) => { KeySelectorBridge.preview-hex(text); }
+                            accepted(text) => {
+                                KeySelectorBridge.apply-hex(text);
+                                KeymapBridge.key-selector-open = false;
+                            }
+                        }
+                        Text {
+                            text: KeySelectorBridge.hex-preview != "" ? "= " + KeySelectorBridge.hex-preview : "";
+                            color: Theme.accent-green;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                        }
+                        Button {
+                            text: "Set";
+                            clicked => {
+                                KeySelectorBridge.apply-hex(KeySelectorBridge.hex-input);
+                                KeymapBridge.key-selector-open = false;
+                            }
+                        }
+                    }
+
+                    // None
+                    KeyTile {
+                        width: 120px;
+                        label: "None (transparent)";
+                        code: 0;
+                        picked(c) => { root.pick(c); }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,274 @@
+// Shared data structures
+export struct KeycapData {
+    x: length,
+    y: length,
+    w: length,
+    h: length,
+    rotation: float,
+    rotation-cx: length,
+    rotation-cy: length,
+    label: string,
+    sublabel: string,
+    keycode: int,
+    color: color,
+    heat: float,  // 0.0 = cold, 1.0 = hottest
+    selected: bool,
+    index: int,
+}
+
+export struct LayerInfo {
+    index: int,
+    name: string,
+    active: bool,
+}
+
+export struct PortInfo {
+    name: string,
+    path: string,
+}
+
+export enum ConnectionState { disconnected, connecting, connected }
+export enum ActiveTab { keymap, advanced, macros, stats, settings }
+
+// Global singletons for Rust<->Slint bridge
+export global AppState {
+    in-out property <ConnectionState> connection: ConnectionState.disconnected;
+    in-out property <ActiveTab> active-tab: ActiveTab.keymap;
+    in-out property <string> status-text: "Disconnected";
+    in-out property <bool> spinner-visible: false;
+    in-out property <string> firmware-version: "";
+    in-out property <int> wpm: 0;
+}
+
+export global ConnectionBridge {
+    in property <[PortInfo]> ports;
+    in-out property <string> selected-port: "";
+    callback connect();
+    callback disconnect();
+    callback refresh-ports();
+}
+
+export global KeymapBridge {
+    in property <[KeycapData]> keycaps;
+    in property <[LayerInfo]> layers;
+    in property <length> content-width: 860px;
+    in property <length> content-height: 360px;
+    in-out property <int> selected-key-index: -1;
+    in-out property <int> active-layer: 0;
+    in-out property <string> selected-key-label: "";
+    in-out property <bool> heatmap-enabled: false;
+    in-out property <bool> key-selector-open: false;
+    // Target for key selector: "keymap", "combo-result", "ko-trigger", "ko-result", "leader-result"
+    in-out property <string> selector-target: "keymap";
+    callback select-key(int);
+    callback switch-layer(int);
+    callback change-key(int, int); // key-index, new-keycode
+    callback rename-layer(int, string); // layer-index, new-name
+}
+
+// ---- Settings ----
+
+export global SettingsBridge {
+    in property <[string]> available-layouts;
+    in-out property <int> selected-layout-index: 0;
+    callback change-layout(int);
+}
+
+// ---- Stats ----
+
+export struct HandBalanceData {
+    left-pct: float,
+    right-pct: float,
+    total: int,
+}
+
+export struct FingerLoadData {
+    name: string,
+    pct: float,
+    count: int,
+}
+
+export struct RowUsageData {
+    name: string,
+    pct: float,
+    count: int,
+}
+
+export struct TopKeyData {
+    name: string,
+    finger: string,
+    count: int,
+    pct: float,
+}
+
+export struct BigramData {
+    alt-hand-pct: float,
+    same-hand-pct: float,
+    sfb-pct: float,
+    total: int,
+}
+
+export global StatsBridge {
+    in property <HandBalanceData> hand-balance;
+    in property <[FingerLoadData]> finger-load;
+    in property <[RowUsageData]> row-usage;
+    in property <[TopKeyData]> top-keys;
+    in property <[string]> dead-keys;
+    in property <int> total-presses;
+    in property <BigramData> bigrams;
+    callback refresh-stats();
+}
+
+// ---- Advanced ----
+
+export struct TapDanceData {
+    index: int,
+    actions: [string],
+}
+
+export struct ComboData {
+    index: int,
+    key1: string,
+    key2: string,
+    result: string,
+}
+
+export struct LeaderData {
+    index: int,
+    sequence: string,
+    result: string,
+}
+
+export struct KeyOverrideData {
+    index: int,
+    trigger: string,
+    result: string,
+}
+
+export global AdvancedBridge {
+    in property <[TapDanceData]> tap-dances;
+    in property <[ComboData]> combos;
+    in property <[LeaderData]> leaders;
+    in property <[KeyOverrideData]> key-overrides;
+    in-out property <string> bt-status: "";
+    in-out property <int> tri-l1-idx: 1;
+    in-out property <int> tri-l2-idx: 2;
+    in-out property <int> tri-l3-idx: 3;
+    // Combo creation: physical key positions
+    in-out property <int> new-combo-r1: 0;
+    in-out property <int> new-combo-c1: 0;
+    in-out property <string> new-combo-key1-name: "Pick...";
+    in-out property <int> new-combo-r2: 0;
+    in-out property <int> new-combo-c2: 0;
+    in-out property <string> new-combo-key2-name: "Pick...";
+    in-out property <int> new-combo-result-code: 0;
+    in-out property <string> new-combo-result-name: "Pick...";
+    // KO creation: keycodes for trigger and result
+    in-out property <int> new-ko-trigger-code: 0;
+    in-out property <string> new-ko-trigger-name: "Pick...";
+    in-out property <int> new-ko-trig-mod-idx: 0; // 0=None,1=Ctrl,2=Shift,...
+    in-out property <int> new-ko-result-code: 0;
+    in-out property <string> new-ko-result-name: "Pick...";
+    in-out property <int> new-ko-res-mod-idx: 0;
+    // Leader creation
+    in-out property <int> new-leader-seq0-code: 0;
+    in-out property <string> new-leader-seq0-name: "";
+    in-out property <int> new-leader-seq1-code: 0;
+    in-out property <string> new-leader-seq1-name: "";
+    in-out property <int> new-leader-seq2-code: 0;
+    in-out property <string> new-leader-seq2-name: "";
+    in-out property <int> new-leader-seq3-code: 0;
+    in-out property <string> new-leader-seq3-name: "";
+    in-out property <int> new-leader-seq-count: 0;
+    in-out property <int> new-leader-result-code: 0;
+    in-out property <string> new-leader-result-name: "Pick...";
+    in-out property <int> new-leader-mod-idx: 0;
+    callback refresh-advanced();
+    callback delete-combo(int);
+    callback delete-leader(int);
+    callback delete-ko(int);
+    callback set-trilayer(int, int, int);
+    callback bt-switch(int);
+    callback create-combo(); // reads r1,c1,r2,c2,result from properties
+    callback create-ko(int, int, int, int); // trigger_code, trig_mod_idx, result_code, res_mod_idx
+    callback create-leader(int, int); // result_code, result_mod_idx (sequence comes from seq0-3 properties)
+    // TAMA
+    in property <string> tama-status: "";
+    callback tama-action(string); // "feed", "play", "sleep", "meds", "toggle"
+    // Autoshift
+    in property <string> autoshift-status: "";
+    callback toggle-autoshift();
+}
+
+// ---- Macros ----
+
+export struct MacroData {
+    slot: int,
+    name: string,
+    steps: string,
+}
+
+export struct MacroStepDisplay {
+    label: string,  // e.g. "A", "T 100ms"
+    is-delay: bool,
+}
+
+export global MacroBridge {
+    in property <[MacroData]> macros;
+    in-out property <int> new-slot-idx: 0;
+    in-out property <string> new-name: "";
+    // Visual step builder
+    in property <[MacroStepDisplay]> new-steps;
+    in-out property <string> new-steps-text: ""; // built text for display
+    callback refresh-macros();
+    callback save-macro();    // reads slot, name, steps from properties
+    callback delete-macro(int);
+    callback add-delay-step(int); // delay in ms (50, 100, 200, 500)
+    callback remove-last-step();
+    callback clear-steps();
+}
+
+// ---- OTA / Flasher ----
+
+export global FlasherBridge {
+    in property <[string]> prog-ports;
+    in-out property <string> selected-prog-port: "";
+    in-out property <string> firmware-path: "";
+    in-out property <int> flash-offset-index: 0; // 0=factory(0x20000), 1=ota_0(0x220000)
+    in property <float> flash-progress: 0;
+    in property <string> flash-status: "";
+    in property <bool> flashing: false;
+    callback refresh-prog-ports();
+    callback browse-firmware();
+    callback flash();
+}
+
+// ---- Key Selector ----
+
+export struct KeyEntry {
+    name: string,
+    code: int,
+    category: string,
+}
+
+export global KeySelectorBridge {
+    in property <[KeyEntry]> all-keys;
+    in property <[KeyEntry]> cat-letters;
+    in property <[KeyEntry]> cat-numbers;
+    in property <[KeyEntry]> cat-modifiers;
+    in property <[KeyEntry]> cat-nav;
+    in property <[KeyEntry]> cat-function;
+    in property <[KeyEntry]> cat-symbols;
+    in property <[KeyEntry]> cat-layers;
+    in property <[KeyEntry]> cat-special;
+    in property <[KeyEntry]> cat-td-macro;
+    in-out property <string> search-text: "";
+    in-out property <string> hex-input: "";
+    in property <string> hex-preview: "";
+    callback apply-filter(string);
+    callback select-keycode(int);
+    callback apply-hex(string);
+    callback apply-mt(int, int);
+    callback apply-lt(int, int);
+    callback preview-hex(string);  // updates hex-preview
+}

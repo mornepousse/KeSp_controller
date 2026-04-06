@@ -1,0 +1,57 @@
+import { Theme } from "../theme.slint";
+import { KeycapData, KeymapBridge } from "../globals.slint";
+
+export component KeyButton inherits Rectangle {
+    in property <KeycapData> data;
+    in property <float> scale: 1.0;
+    callback clicked(int);
+
+    // Heat color: interpolate blue(cold) -> yellow -> red(hot)
+    property <color> heat-color:
+        data.heat < 0.5
+            ? Colors.blue.mix(Colors.yellow, data.heat * 2)
+            : Colors.yellow.mix(Colors.red, (data.heat - 0.5) * 2);
+
+    property <color> base-color:
+        KeymapBridge.heatmap-enabled && data.heat > 0 ? root.heat-color : data.color;
+
+    width: data.w;
+    height: data.h;
+    background: transparent;
+
+    inner := Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 4px;
+        background: data.selected ? Theme.accent-purple : root.base-color;
+        border-width: 1px;
+        border-color: data.selected ? Theme.accent-cyan : Theme.bg-primary;
+        transform-rotation: data.rotation * 1deg;
+        transform-origin: {
+            x: self.width / 2,
+            y: self.height / 2,
+        };
+
+        Text {
+            text: data.label;
+            color: Theme.fg-primary;
+            font-size: max(7px, 11px * root.scale);
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        if data.sublabel != "" : Text {
+            y: parent.height - 14px * root.scale;
+            text: data.sublabel;
+            color: Theme.fg-secondary;
+            font-size: max(5px, 8px * root.scale);
+            horizontal-alignment: center;
+            width: 100%;
+        }
+
+        TouchArea {
+            clicked => { root.clicked(data.index); }
+            mouse-cursor: pointer;
+        }
+    }
+}

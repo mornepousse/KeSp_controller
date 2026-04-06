@@ -1,0 +1,347 @@
+import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { AdvancedBridge, AppState, ConnectionState, KeymapBridge } from "../globals.slint";
+
+component SectionHeader inherits Text {
+    color: Theme.accent-cyan;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+component ItemRow inherits Rectangle {
+    in property <string> prefix;
+    in property <string> left;
+    in property <string> right;
+    callback delete();
+    background: Theme.bg-primary;
+    border-radius: 4px;
+    height: 30px;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 6px;
+        Text { text: root.prefix; color: Theme.accent-purple; font-size: 11px; vertical-alignment: center; width: 35px; }
+        Text { text: root.left; color: Theme.fg-primary; font-size: 11px; vertical-alignment: center; horizontal-stretch: 1; }
+        Text { text: "->"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+        Text { text: root.right; color: Theme.accent-green; font-size: 11px; vertical-alignment: center; }
+        Button { text: "Del"; clicked => { root.delete(); } }
+    }
+}
+
+component PickButton inherits Rectangle {
+    in property <string> label: "Pick...";
+    in property <string> target;
+    width: 100px;
+    height: 28px;
+    border-radius: 4px;
+    background: pick-ta.has-hover ? Theme.button-hover : Theme.button-bg;
+    Text { text: root.label; color: Theme.fg-primary; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
+    pick-ta := TouchArea {
+        clicked => { KeymapBridge.selector-target = root.target; KeymapBridge.key-selector-open = true; }
+        mouse-cursor: pointer;
+    }
+}
+
+component ModComboBox inherits ComboBox {
+    model: ["None", "Ctrl", "Shift", "Alt", "GUI", "RCtrl", "RShift", "RAlt", "RGUI"];
+    width: 90px;
+}
+
+export component TabAdvanced inherits Rectangle {
+    background: Theme.bg-primary;
+
+    ScrollView {
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // Header
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text: "Advanced Features"; color: Theme.fg-primary; font-size: 20px; font-weight: 700; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            Button {
+                text: "Refresh All";
+                enabled: AppState.connection == ConnectionState.connected;
+                clicked => { AdvancedBridge.refresh-advanced(); }
+            }
+        }
+
+        // Two columns
+        HorizontalLayout {
+            spacing: 12px;
+
+            // ==================== Left column ====================
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 12px;
+
+                // --- Tap Dance ---
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+                        SectionHeader { text: "Tap Dance"; }
+                        if AdvancedBridge.tap-dances.length == 0 : Text { text: "No tap dances"; color: Theme.fg-secondary; font-size: 11px; }
+                        for td in AdvancedBridge.tap-dances : Rectangle {
+                            background: Theme.bg-primary;
+                            border-radius: 4px;
+                            height: 30px;
+                            HorizontalLayout {
+                                padding-left: 8px; padding-right: 8px; spacing: 8px;
+                                Text { text: "TD" + td.index; color: Theme.accent-purple; font-size: 11px; vertical-alignment: center; width: 35px; }
+                                for action in td.actions : Text { text: action; color: Theme.fg-primary; font-size: 11px; vertical-alignment: center; }
+                            }
+                        }
+                    }
+                }
+
+                // --- Key Overrides ---
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+                        SectionHeader { text: "Key Overrides"; }
+                        if AdvancedBridge.key-overrides.length == 0 : Text { text: "No key overrides"; color: Theme.fg-secondary; font-size: 11px; }
+                        for ko in AdvancedBridge.key-overrides : ItemRow {
+                            prefix: "KO" + ko.index;
+                            left: ko.trigger;
+                            right: ko.result;
+                            delete => { AdvancedBridge.delete-ko(ko.index); }
+                        }
+
+                        // --- Add KO ---
+                        Rectangle {
+                            background: Theme.bg-primary;
+                            border-radius: 4px;
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+                                Text { text: "Add Key Override"; color: Theme.fg-secondary; font-size: 12px; font-weight: 600; }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+                                    Text { text: "Trigger:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    PickButton { label: AdvancedBridge.new-ko-trigger-name; target: "ko-trigger"; }
+                                    Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    ModComboBox { current-index <=> AdvancedBridge.new-ko-trig-mod-idx; }
+                                }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+                                    Text { text: "Result:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    PickButton { label: AdvancedBridge.new-ko-result-name; target: "ko-result"; }
+                                    Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    ModComboBox { current-index <=> AdvancedBridge.new-ko-res-mod-idx; }
+                                }
+                                Button {
+                                    text: "Add Key Override";
+                                    clicked => { AdvancedBridge.create-ko(AdvancedBridge.new-ko-trigger-code, AdvancedBridge.new-ko-trig-mod-idx, AdvancedBridge.new-ko-result-code, AdvancedBridge.new-ko-res-mod-idx); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- Autoshift ---
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+                        SectionHeader { text: "Autoshift"; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text { text: AdvancedBridge.autoshift-status != "" ? AdvancedBridge.autoshift-status : "Unknown"; color: Theme.fg-primary; font-size: 11px; vertical-alignment: center; }
+                            Button { text: "Toggle"; clicked => { AdvancedBridge.toggle-autoshift(); } }
+                        }
+                    }
+                }
+            }
+
+            // ==================== Right column ====================
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 12px;
+
+                // --- Combos ---
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+                        SectionHeader { text: "Combos"; }
+                        if AdvancedBridge.combos.length == 0 : Text { text: "No combos"; color: Theme.fg-secondary; font-size: 11px; }
+                        for combo in AdvancedBridge.combos : ItemRow {
+                            prefix: "#" + combo.index;
+                            left: combo.key1 + " + " + combo.key2;
+                            right: combo.result;
+                            delete => { AdvancedBridge.delete-combo(combo.index); }
+                        }
+
+                        // --- Add Combo ---
+                        Rectangle {
+                            background: Theme.bg-primary;
+                            border-radius: 4px;
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+                                Text { text: "Add Combo"; color: Theme.fg-secondary; font-size: 12px; font-weight: 600; }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+                                    Text { text: "Key 1:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    PickButton { label: AdvancedBridge.new-combo-key1-name; target: "combo-key1"; }
+                                    Text { text: "Key 2:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    PickButton { label: AdvancedBridge.new-combo-key2-name; target: "combo-key2"; }
+                                }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+                                    Text { text: "Result:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    PickButton { label: AdvancedBridge.new-combo-result-name; target: "combo-result"; }
+                                    Button {
+                                        text: "Add Combo";
+                                        clicked => { AdvancedBridge.create-combo(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- Leader Keys ---
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+                        SectionHeader { text: "Leader Keys"; }
+                        if AdvancedBridge.leaders.length == 0 : Text { text: "No leader keys"; color: Theme.fg-secondary; font-size: 11px; }
+                        for leader in AdvancedBridge.leaders : ItemRow {
+                            prefix: "#" + leader.index;
+                            left: leader.sequence;
+                            right: leader.result;
+                            delete => { AdvancedBridge.delete-leader(leader.index); }
+                        }
+
+                        // --- Add Leader ---
+                        Rectangle {
+                            background: Theme.bg-primary;
+                            border-radius: 4px;
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+                                Text { text: "Add Leader Key"; color: Theme.fg-secondary; font-size: 12px; font-weight: 600; }
+
+                                // Sequence: show picked keys + Add button
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    alignment: start;
+                                    Text { text: "Sequence:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    if AdvancedBridge.new-leader-seq0-name != "" : Rectangle {
+                                        width: 60px; height: 26px; border-radius: 3px; background: Theme.button-bg;
+                                        Text { text: AdvancedBridge.new-leader-seq0-name; color: Theme.fg-primary; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                    if AdvancedBridge.new-leader-seq1-name != "" : Rectangle {
+                                        width: 60px; height: 26px; border-radius: 3px; background: Theme.button-bg;
+                                        Text { text: AdvancedBridge.new-leader-seq1-name; color: Theme.fg-primary; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                    if AdvancedBridge.new-leader-seq2-name != "" : Rectangle {
+                                        width: 60px; height: 26px; border-radius: 3px; background: Theme.button-bg;
+                                        Text { text: AdvancedBridge.new-leader-seq2-name; color: Theme.fg-primary; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                    if AdvancedBridge.new-leader-seq3-name != "" : Rectangle {
+                                        width: 60px; height: 26px; border-radius: 3px; background: Theme.button-bg;
+                                        Text { text: AdvancedBridge.new-leader-seq3-name; color: Theme.fg-primary; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                    if AdvancedBridge.new-leader-seq-count < 4 : PickButton {
+                                        width: 40px;
+                                        label: "+";
+                                        target: "leader-seq";
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+                                    Text { text: "Result:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    PickButton { label: AdvancedBridge.new-leader-result-name; target: "leader-result"; }
+                                    Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    ModComboBox { current-index <=> AdvancedBridge.new-leader-mod-idx; }
+                                }
+                                Button {
+                                    text: "Add Leader Key";
+                                    clicked => { AdvancedBridge.create-leader(AdvancedBridge.new-leader-result-code, AdvancedBridge.new-leader-mod-idx); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- Tri-Layer ---
+                Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 8px;
+                        SectionHeader { text: "Tri-Layer"; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Text { text: "L1:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
+                            ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l1-idx; }
+                            Text { text: "L2:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
+                            ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l2-idx; }
+                            Text { text: "-> L3:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
+                            ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l3-idx; }
+                            Button { text: "Set"; clicked => { AdvancedBridge.set-trilayer(AdvancedBridge.tri-l1-idx, AdvancedBridge.tri-l2-idx, AdvancedBridge.tri-l3-idx); } }
+                        }
+                    }
+                }
+
+                // --- BT ---
+                if AdvancedBridge.bt-status != "" : Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+                        SectionHeader { text: "Bluetooth"; }
+                        Text { text: AdvancedBridge.bt-status; color: Theme.fg-primary; font-size: 11px; }
+                    }
+                }
+
+                // --- TAMA ---
+                if AdvancedBridge.tama-status != "" : Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+                        SectionHeader { text: "Tamagotchi"; }
+                        Text { text: AdvancedBridge.tama-status; color: Theme.fg-primary; font-size: 11px; wrap: word-wrap; }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Button { text: "Feed"; clicked => { AdvancedBridge.tama-action("feed"); } }
+                            Button { text: "Play"; clicked => { AdvancedBridge.tama-action("play"); } }
+                            Button { text: "Sleep"; clicked => { AdvancedBridge.tama-action("sleep"); } }
+                            Button { text: "Meds"; clicked => { AdvancedBridge.tama-action("meds"); } }
+                            Button { text: "On/Off"; clicked => { AdvancedBridge.tama-action("toggle"); } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    }
+}

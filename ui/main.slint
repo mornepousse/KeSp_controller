@@ -1,0 +1,62 @@
+import { TabWidget } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppState, ActiveTab } from "globals.slint";
+import { ConnectionBar } from "components/connection_bar.slint";
+import { StatusBar } from "components/status_bar.slint";
+import { KeySelector } from "components/key_selector.slint";
+import { TabKeymap } from "tabs/tab_keymap.slint";
+import { TabAdvanced } from "tabs/tab_advanced.slint";
+import { TabMacros } from "tabs/tab_macros.slint";
+import { TabStats } from "tabs/tab_stats.slint";
+import { TabSettings } from "tabs/tab_settings.slint";
+import { TabFlasher } from "tabs/tab_flasher.slint";
+
+export { AppState, Theme }
+export { ConnectionBridge, KeymapBridge, SettingsBridge, StatsBridge, AdvancedBridge, MacroBridge, FlasherBridge, KeySelectorBridge } from "globals.slint";
+
+export component MainWindow inherits Window {
+    title: "KaSe Controller";
+    preferred-width: 1000px;
+    preferred-height: 700px;
+    min-width: 600px;
+    min-height: 450px;
+    background: Theme.bg-primary;
+
+    VerticalLayout {
+        ConnectionBar { }
+
+        TabWidget {
+            vertical-stretch: 1;
+
+            Tab {
+                title: "Keymap";
+                TabKeymap { }
+            }
+            Tab {
+                title: "Advanced";
+                TabAdvanced { }
+            }
+            Tab {
+                title: "Macros";
+                TabMacros { }
+            }
+            Tab {
+                title: "Stats";
+                TabStats { }
+            }
+            Tab {
+                title: "Settings";
+                TabSettings { }
+            }
+            Tab {
+                title: "Flash";
+                TabFlasher { }
+            }
+        }
+
+        StatusBar { }
+    }
+
+    // Modal overlay (above everything)
+    KeySelector { }
+}

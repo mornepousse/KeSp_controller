@@ -1,0 +1,39 @@
+import { Theme } from "../theme.slint";
+import { AppState } from "../globals.slint";
+
+export component StatusBar inherits Rectangle {
+    height: 32px;
+    background: Theme.bg-secondary;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 16px;
+
+        // Status text
+        Text {
+            text: AppState.status-text;
+            color: Theme.fg-secondary;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        // WPM
+        Text {
+            text: AppState.wpm > 0 ? "WPM: " + AppState.wpm : "";
+            color: Theme.accent-cyan;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+
+        // Version
+        Text {
+            text: "v0.6.0";
+            color: Theme.fg-secondary;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+}

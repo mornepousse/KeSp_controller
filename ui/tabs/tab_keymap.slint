@@ -1,0 +1,140 @@
+import { Button, LineEdit } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { KeymapBridge, AppState, ConnectionState } from "../globals.slint";
+import { KeyboardView } from "../components/keyboard_view.slint";
+
+export component TabKeymap inherits VerticalLayout {
+    in-out property <bool> renaming: false;
+
+    padding: 8px;
+    spacing: 6px;
+
+    // Main area: layers sidebar + keyboard
+    HorizontalLayout {
+        vertical-stretch: 1;
+        spacing: 6px;
+
+        // Layer sidebar (vertical)
+        VerticalLayout {
+            width: 90px;
+            spacing: 4px;
+            alignment: start;
+
+            Text {
+                text: "Layers";
+                color: Theme.fg-secondary;
+                font-size: 11px;
+                horizontal-alignment: center;
+            }
+
+            for layer[idx] in KeymapBridge.layers : Rectangle {
+                height: 30px;
+                border-radius: 4px;
+                background: layer.active ? Theme.accent-purple : Theme.button-bg;
+
+                Text {
+                    text: layer.name;
+                    color: Theme.fg-primary;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => { KeymapBridge.switch-layer(layer.index); }
+                    mouse-cursor: pointer;
+                }
+            }
+
+            // Rename
+            if root.renaming : VerticalLayout {
+                spacing: 4px;
+                rename-input := LineEdit {
+                    placeholder-text: "New name";
+                    accepted(text) => {
+                        KeymapBridge.rename-layer(KeymapBridge.active-layer, text);
+                        root.renaming = false;
+                    }
+                }
+                Button {
+                    text: "Cancel";
+                    clicked => { root.renaming = false; }
+                }
+            }
+
+            if !root.renaming && AppState.connection == ConnectionState.connected : Rectangle {
+                height: 24px;
+                border-radius: 4px;
+                background: rename-ta.has-hover ? Theme.button-hover : Theme.button-bg;
+
+                Text {
+                    text: "Rename";
+                    color: Theme.fg-secondary;
+                    font-size: 10px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                rename-ta := TouchArea {
+                    clicked => { root.renaming = true; }
+                    mouse-cursor: pointer;
+                }
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            // Heatmap toggle
+            Rectangle {
+                height: 30px;
+                border-radius: 4px;
+                background: KeymapBridge.heatmap-enabled ? Theme.accent-orange : Theme.button-bg;
+
+                Text {
+                    text: "Heatmap";
+                    color: Theme.fg-primary;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => { KeymapBridge.heatmap-enabled = !KeymapBridge.heatmap-enabled; }
+                    mouse-cursor: pointer;
+                }
+            }
+        }
+
+        // Keyboard view
+        KeyboardView {
+            horizontal-stretch: 1;
+        }
+    }
+
+    // Selected key info bar
+    if KeymapBridge.selected-key-index >= 0 : Rectangle {
+        height: 36px;
+        background: Theme.bg-secondary;
+        border-radius: 4px;
+
+        HorizontalLayout {
+            padding: 8px;
+            spacing: 12px;
+
+            Text {
+                text: "Selected: " + KeymapBridge.selected-key-label;
+                color: Theme.accent-cyan;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            Button {
+                text: "Change Key...";
+                clicked => {
+                    KeymapBridge.key-selector-open = true;
+                }
+            }
+        }
+    }
+}
