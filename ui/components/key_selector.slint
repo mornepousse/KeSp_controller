@@ -1,5 +1,6 @@
-import { LineEdit, Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { LineEdit, ComboBox, ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+import { DarkButton } from "dark_button.slint";
 import { KeySelectorBridge, KeymapBridge, KeyEntry, KeycapData } from "../globals.slint";
 import { KeyButton } from "key_button.slint";
 
@@ -185,7 +186,7 @@ export component KeySelector inherits Rectangle {
                             font-size: 11px;
                             vertical-alignment: center;
                         }
-                        Button {
+                        DarkButton {
                             text: "Set";
                             clicked => {
                                 KeySelectorBridge.apply-mt(mt-mod.current-index, mt-key.current-index);
@@ -217,7 +218,7 @@ export component KeySelector inherits Rectangle {
                             font-size: 11px;
                             vertical-alignment: center;
                         }
-                        Button {
+                        DarkButton {
                             text: "Set";
                             clicked => {
                                 KeySelectorBridge.apply-lt(lt-layer.current-index, lt-key.current-index);
@@ -248,7 +249,7 @@ export component KeySelector inherits Rectangle {
                             font-size: 11px;
                             vertical-alignment: center;
                         }
-                        Button {
+                        DarkButton {
                             text: "Set";
                             clicked => {
                                 KeySelectorBridge.apply-hex(KeySelectorBridge.hex-input);

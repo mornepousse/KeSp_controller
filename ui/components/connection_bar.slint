@@ -1,5 +1,6 @@
-import { ComboBox, Button } from "std-widgets.slint";
+import { ComboBox } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+import { DarkButton } from "dark_button.slint";
 import { AppState, ConnectionBridge, ConnectionState } from "../globals.slint";
 
 export component ConnectionBar inherits Rectangle {
@@ -29,7 +30,7 @@ export component ConnectionBar inherits Rectangle {
         }
 
         // Connect/Disconnect button
-        Button {
+        DarkButton {
             text: AppState.connection == ConnectionState.connected ? "Disconnect" : "Connect";
             enabled: AppState.connection == ConnectionState.connected || AppState.connection == ConnectionState.disconnected;
             clicked => {

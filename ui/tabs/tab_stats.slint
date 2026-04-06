@@ -1,5 +1,6 @@
-import { Button, ScrollView } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+import { DarkButton } from "../components/dark_button.slint";
 import { StatsBridge, AppState, ConnectionState } from "../globals.slint";
 
 component BarChart inherits Rectangle {
@@ -63,7 +64,7 @@ export component TabStats inherits Rectangle {
                 vertical-alignment: center;
             }
             Rectangle { horizontal-stretch: 1; }
-            Button {
+            DarkButton {
                 text: "Refresh";
                 enabled: AppState.connection == ConnectionState.connected;
                 clicked => { StatsBridge.refresh-stats(); }

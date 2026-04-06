@@ -1,5 +1,6 @@
-import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { ComboBox, ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+import { DarkButton } from "../components/dark_button.slint";
 import { AdvancedBridge, AppState, ConnectionState, KeymapBridge } from "../globals.slint";
 
 component SectionHeader inherits Text {
@@ -25,7 +26,7 @@ component ItemRow inherits Rectangle {
         Text { text: root.left; color: Theme.fg-primary; font-size: 11px; vertical-alignment: center; horizontal-stretch: 1; }
         Text { text: "->"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
         Text { text: root.right; color: Theme.accent-green; font-size: 11px; vertical-alignment: center; }
-        Button { text: "Del"; clicked => { root.delete(); } }
+        DarkButton { text: "Del"; clicked => { root.delete(); } }
     }
 }
 
@@ -61,7 +62,7 @@ export component TabAdvanced inherits Rectangle {
             spacing: 8px;
             Text { text: "Advanced Features"; color: Theme.fg-primary; font-size: 20px; font-weight: 700; vertical-alignment: center; }
             Rectangle { horizontal-stretch: 1; }
-            Button {
+            DarkButton {
                 text: "Refresh All";
                 enabled: AppState.connection == ConnectionState.connected;
                 clicked => { AdvancedBridge.refresh-advanced(); }
@@ -139,7 +140,7 @@ export component TabAdvanced inherits Rectangle {
                                     Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
                                     ModComboBox { current-index <=> AdvancedBridge.new-ko-res-mod-idx; }
                                 }
-                                Button {
+                                DarkButton {
                                     text: "Add Key Override";
                                     clicked => { AdvancedBridge.create-ko(AdvancedBridge.new-ko-trigger-code, AdvancedBridge.new-ko-trig-mod-idx, AdvancedBridge.new-ko-result-code, AdvancedBridge.new-ko-res-mod-idx); }
                                 }
@@ -159,7 +160,7 @@ export component TabAdvanced inherits Rectangle {
                         HorizontalLayout {
                             spacing: 8px;
                             Text { text: AdvancedBridge.autoshift-status != "" ? AdvancedBridge.autoshift-status : "Unknown"; color: Theme.fg-primary; font-size: 11px; vertical-alignment: center; }
-                            Button { text: "Toggle"; clicked => { AdvancedBridge.toggle-autoshift(); } }
+                            DarkButton { text: "Toggle"; clicked => { AdvancedBridge.toggle-autoshift(); } }
                         }
                     }
                 }
@@ -207,7 +208,7 @@ export component TabAdvanced inherits Rectangle {
                                     alignment: start;
                                     Text { text: "Result:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
                                     PickButton { label: AdvancedBridge.new-combo-result-name; target: "combo-result"; }
-                                    Button {
+                                    DarkButton {
                                         text: "Add Combo";
                                         clicked => { AdvancedBridge.create-combo(); }
                                     }
@@ -278,7 +279,7 @@ export component TabAdvanced inherits Rectangle {
                                     Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
                                     ModComboBox { current-index <=> AdvancedBridge.new-leader-mod-idx; }
                                 }
-                                Button {
+                                DarkButton {
                                     text: "Add Leader Key";
                                     clicked => { AdvancedBridge.create-leader(AdvancedBridge.new-leader-result-code, AdvancedBridge.new-leader-mod-idx); }
                                 }
@@ -304,7 +305,7 @@ export component TabAdvanced inherits Rectangle {
                             ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l2-idx; }
                             Text { text: "-> L3:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
                             ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l3-idx; }
-                            Button { text: "Set"; clicked => { AdvancedBridge.set-trilayer(AdvancedBridge.tri-l1-idx, AdvancedBridge.tri-l2-idx, AdvancedBridge.tri-l3-idx); } }
+                            DarkButton { text: "Set"; clicked => { AdvancedBridge.set-trilayer(AdvancedBridge.tri-l1-idx, AdvancedBridge.tri-l2-idx, AdvancedBridge.tri-l3-idx); } }
                         }
                     }
                 }
@@ -332,11 +333,11 @@ export component TabAdvanced inherits Rectangle {
                         Text { text: AdvancedBridge.tama-status; color: Theme.fg-primary; font-size: 11px; wrap: word-wrap; }
                         HorizontalLayout {
                             spacing: 4px;
-                            Button { text: "Feed"; clicked => { AdvancedBridge.tama-action("feed"); } }
-                            Button { text: "Play"; clicked => { AdvancedBridge.tama-action("play"); } }
-                            Button { text: "Sleep"; clicked => { AdvancedBridge.tama-action("sleep"); } }
-                            Button { text: "Meds"; clicked => { AdvancedBridge.tama-action("meds"); } }
-                            Button { text: "On/Off"; clicked => { AdvancedBridge.tama-action("toggle"); } }
+                            DarkButton { text: "Feed"; clicked => { AdvancedBridge.tama-action("feed"); } }
+                            DarkButton { text: "Play"; clicked => { AdvancedBridge.tama-action("play"); } }
+                            DarkButton { text: "Sleep"; clicked => { AdvancedBridge.tama-action("sleep"); } }
+                            DarkButton { text: "Meds"; clicked => { AdvancedBridge.tama-action("meds"); } }
+                            DarkButton { text: "On/Off"; clicked => { AdvancedBridge.tama-action("toggle"); } }
                         }
                     }
                 }

@@ -1,5 +1,6 @@
-import { Button, LineEdit } from "std-widgets.slint";
+import { LineEdit } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+import { DarkButton } from "../components/dark_button.slint";
 import { KeymapBridge, AppState, ConnectionState } from "../globals.slint";
 import { KeyboardView } from "../components/keyboard_view.slint";
 
@@ -56,7 +57,7 @@ export component TabKeymap inherits VerticalLayout {
                         root.renaming = false;
                     }
                 }
-                Button {
+                DarkButton {
                     text: "Cancel";
                     clicked => { root.renaming = false; }
                 }
@@ -129,7 +130,7 @@ export component TabKeymap inherits VerticalLayout {
 
             Rectangle { horizontal-stretch: 1; }
 
-            Button {
+            DarkButton {
                 text: "Change Key...";
                 clicked => {
                     KeymapBridge.key-selector-open = true;

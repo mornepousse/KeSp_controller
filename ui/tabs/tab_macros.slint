@@ -1,5 +1,6 @@
-import { Button, ComboBox, ScrollView, LineEdit } from "std-widgets.slint";
+import { ComboBox, ScrollView, LineEdit } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+import { DarkButton } from "../components/dark_button.slint";
 import { MacroBridge, AppState, ConnectionState, KeymapBridge } from "../globals.slint";
 
 export component TabMacros inherits Rectangle {
@@ -14,7 +15,7 @@ export component TabMacros inherits Rectangle {
             spacing: 8px;
             Text { text: "Macros"; color: Theme.fg-primary; font-size: 20px; font-weight: 700; vertical-alignment: center; }
             Rectangle { horizontal-stretch: 1; }
-            Button {
+            DarkButton {
                 text: "Refresh";
                 enabled: AppState.connection == ConnectionState.connected;
                 clicked => { MacroBridge.refresh-macros(); }
@@ -87,7 +88,7 @@ export component TabMacros inherits Rectangle {
                     spacing: 6px;
                     alignment: start;
 
-                    Button {
+                    DarkButton {
                         text: "Add Key";
                         clicked => {
                             KeymapBridge.selector-target = "macro-step";
@@ -95,14 +96,14 @@ export component TabMacros inherits Rectangle {
                         }
                     }
 
-                    Button { text: "T 50ms"; clicked => { MacroBridge.add-delay-step(50); } }
-                    Button { text: "T 100ms"; clicked => { MacroBridge.add-delay-step(100); } }
-                    Button { text: "T 200ms"; clicked => { MacroBridge.add-delay-step(200); } }
+                    DarkButton { text: "T 50ms"; clicked => { MacroBridge.add-delay-step(50); } }
+                    DarkButton { text: "T 100ms"; clicked => { MacroBridge.add-delay-step(100); } }
+                    DarkButton { text: "T 200ms"; clicked => { MacroBridge.add-delay-step(200); } }
 
                     Rectangle { horizontal-stretch: 1; }
 
-                    Button { text: "Undo"; clicked => { MacroBridge.remove-last-step(); } }
-                    Button { text: "Clear"; clicked => { MacroBridge.clear-steps(); } }
+                    DarkButton { text: "Undo"; clicked => { MacroBridge.remove-last-step(); } }
+                    DarkButton { text: "Clear"; clicked => { MacroBridge.clear-steps(); } }
                 }
 
                 // Save
@@ -110,7 +111,7 @@ export component TabMacros inherits Rectangle {
                     spacing: 8px;
                     alignment: start;
 
-                    Button {
+                    DarkButton {
                         text: "Save Macro";
                         enabled: AppState.connection == ConnectionState.connected;
                         clicked => { MacroBridge.save-macro(); }
@@ -153,7 +154,7 @@ export component TabMacros inherits Rectangle {
                         Text { text: "#" + macro.slot; color: Theme.accent-purple; font-size: 12px; vertical-alignment: center; width: 30px; }
                         Text { text: macro.name; color: Theme.fg-primary; font-size: 12px; font-weight: 600; vertical-alignment: center; width: 100px; }
                         Text { text: macro.steps; color: Theme.fg-secondary; font-size: 10px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
-                        Button { text: "Del"; clicked => { MacroBridge.delete-macro(macro.slot); } }
+                        DarkButton { text: "Del"; clicked => { MacroBridge.delete-macro(macro.slot); } }
                     }
                 }
             }

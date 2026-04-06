@@ -1,5 +1,6 @@
-import { Button, ComboBox, LineEdit } from "std-widgets.slint";
+import { ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+import { DarkButton } from "../components/dark_button.slint";
 import { FlasherBridge } from "../globals.slint";
 
 export component TabFlasher inherits Rectangle {
@@ -57,7 +58,7 @@ export component TabFlasher inherits Rectangle {
                         placeholder-text: "/dev/ttyUSB0";
                     }
 
-                    Button {
+                    DarkButton {
                         text: "Refresh";
                         clicked => { FlasherBridge.refresh-prog-ports(); }
                     }
@@ -123,7 +124,7 @@ export component TabFlasher inherits Rectangle {
                         overflow: elide;
                     }
 
-                    Button {
+                    DarkButton {
                         text: "Browse...";
                         clicked => { FlasherBridge.browse-firmware(); }
                     }
@@ -143,7 +144,7 @@ export component TabFlasher inherits Rectangle {
                 HorizontalLayout {
                     spacing: 12px;
 
-                    Button {
+                    DarkButton {
                         text: FlasherBridge.flashing ? "Flashing..." : "Flash Firmware";
                         enabled: !FlasherBridge.flashing
                             && FlasherBridge.firmware-path != ""
