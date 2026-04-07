@@ -31,8 +31,10 @@ pub mod cmd {
 
     // Statistics
     pub const KEYSTATS_BIN: u8 = 0x40;
+    pub const KEYSTATS_TEXT: u8 = 0x41;
     pub const KEYSTATS_RESET: u8 = 0x42;
     pub const BIGRAMS_BIN: u8 = 0x43;
+    pub const BIGRAMS_TEXT: u8 = 0x44;
     pub const BIGRAMS_RESET: u8 = 0x45;
 
     // Tap Dance
@@ -64,7 +66,7 @@ pub mod cmd {
     pub const KO_LIST: u8 = 0x92;
     pub const KO_DELETE: u8 = 0x93;
     pub const WPM_QUERY: u8 = 0x94;
-    pub const TRILAYER_SET: u8 = 0x94;
+    pub const TRILAYER_SET: u8 = 0x95;
 
     // Tamagotchi
     pub const TAMA_QUERY: u8 = 0xA0;
@@ -187,6 +189,32 @@ pub fn leader_set_payload(index: u8, sequence: &[u8], result: u8, result_mod: u8
     payload.push(result);
     payload.push(result_mod);
     payload
+}
+
+/// Build SETLAYER payload: [layer:u8][keycodes: ROWS*COLS * u16 LE]
+pub fn setlayer_payload(layer: u8, keymap: &[Vec<u16>]) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(1 + keymap.len() * keymap.first().map_or(0, |r| r.len()) * 2);
+    payload.push(layer);
+    for row in keymap {
+        for &kc in row {
+            payload.push((kc & 0xFF) as u8);
+            payload.push((kc >> 8) as u8);
+        }
+    }
+    payload
+}
+
+/// Build SET_LAYOUT_NAME payload: [layer:u8][name bytes]
+pub fn set_layout_name_payload(layer: u8, name: &str) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(1 + name.len());
+    payload.push(layer);
+    payload.extend_from_slice(name.as_bytes());
+    payload
+}
+
+/// Build SETKEY payload: [layer:u8][row:u8][col:u8][value:u16 LE]
+pub fn setkey_payload(layer: u8, row: u8, col: u8, keycode: u16) -> Vec<u8> {
+    vec![layer, row, col, (keycode & 0xFF) as u8, (keycode >> 8) as u8]
 }
 
 /// Parsed KR response.

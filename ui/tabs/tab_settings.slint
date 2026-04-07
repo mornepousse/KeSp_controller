@@ -122,6 +122,69 @@ export component TabSettings inherits Rectangle {
             }
         }
 
+        // Config backup / restore
+        Rectangle {
+            background: Theme.bg-secondary;
+            border-radius: 8px;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 10px;
+
+                Text { text: "Configuration Backup"; color: Theme.accent-cyan; font-size: 14px; font-weight: 600; }
+                Text { text: "Export or import your full keyboard configuration (keymaps, macros, combos, etc.)"; color: Theme.fg-secondary; font-size: 11px; }
+
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    DarkButton {
+                        text: SettingsBridge.config-busy ? "Working..." : "Export Config";
+                        primary: true;
+                        enabled: !SettingsBridge.config-busy
+                            && AppState.connection == ConnectionState.connected;
+                        clicked => { SettingsBridge.config-export(); }
+                    }
+
+                    DarkButton {
+                        text: SettingsBridge.config-busy ? "Working..." : "Import Config";
+                        enabled: !SettingsBridge.config-busy
+                            && AppState.connection == ConnectionState.connected;
+                        clicked => { SettingsBridge.config-import(); }
+                    }
+
+                    Text {
+                        text: SettingsBridge.config-status;
+                        color: Theme.fg-primary;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                }
+
+                if SettingsBridge.config-busy : Rectangle {
+                    height: 20px;
+                    background: Theme.bg-primary;
+                    border-radius: 4px;
+
+                    Rectangle {
+                        x: 0;
+                        width: parent.width * clamp(SettingsBridge.config-progress, 0, 1);
+                        height: 100%;
+                        background: SettingsBridge.config-progress >= 1.0 ? Theme.accent-green : Theme.accent-purple;
+                        border-radius: 4px;
+                    }
+
+                    Text {
+                        text: round(SettingsBridge.config-progress * 100) + "%";
+                        color: Theme.fg-primary;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
         // About
         Rectangle {
             background: Theme.bg-secondary;

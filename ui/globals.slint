@@ -81,6 +81,12 @@ export global SettingsBridge {
     in property <bool> ota-flashing: false;
     callback ota-browse();
     callback ota-start();
+    // Config import/export
+    in property <string> config-status: "";
+    in property <bool> config-busy: false;
+    in property <float> config-progress: 0;
+    callback config-export();
+    callback config-import();
 }
 
 // ---- Stats ----
@@ -264,6 +270,22 @@ export global FlasherBridge {
     callback refresh-prog-ports();
     callback browse-firmware();
     callback flash();
+}
+
+// ---- Layout Preview ----
+
+export global LayoutBridge {
+    in property <[KeycapData]> keycaps;
+    in property <length> content-width: 860px;
+    in property <length> content-height: 360px;
+    in property <string> status: "";
+    in property <string> json-text: "";
+    in-out property <string> file-path: "";
+    in-out property <bool> auto-refresh: false;
+    callback load-from-file();
+    callback load-from-keyboard();
+    callback load-json(string);
+    callback export-json();
 }
 
 // ---- Key Selector ----

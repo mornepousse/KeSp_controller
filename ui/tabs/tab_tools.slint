@@ -1,0 +1,309 @@
+import { DarkLineEdit } from "../components/dark_line_edit.slint";
+import { Theme } from "../theme.slint";
+import { DarkButton } from "../components/dark_button.slint";
+import { DarkCheckbox } from "../components/dark_checkbox.slint";
+import { DarkComboBox } from "../components/dark_combo_box.slint";
+import { FlasherBridge, LayoutBridge, KeycapData, AppState, ConnectionState } from "../globals.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export component TabTools inherits Rectangle {
+    background: Theme.bg-primary;
+
+    ScrollView {
+        VerticalLayout {
+            padding: 20px;
+            spacing: 16px;
+
+            Text {
+                text: "Tools";
+                color: Theme.fg-primary;
+                font-size: 20px;
+                font-weight: 700;
+            }
+
+            // ===================== LAYOUT PREVIEW =====================
+            Rectangle {
+                background: Theme.bg-secondary;
+                border-radius: 8px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        Text {
+                            text: "Layout Preview";
+                            color: Theme.accent-cyan;
+                            font-size: 14px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+
+                        Rectangle { horizontal-stretch: 1; }
+
+                        DarkButton {
+                            text: "From keyboard";
+                            primary: true;
+                            enabled: AppState.connection == ConnectionState.connected;
+                            clicked => { LayoutBridge.load-from-keyboard(); }
+                        }
+
+                        DarkButton {
+                            text: "Load file...";
+                            clicked => { LayoutBridge.load-from-file(); }
+                        }
+
+                        DarkButton {
+                            text: "Export...";
+                            enabled: LayoutBridge.json-text != "";
+                            clicked => { LayoutBridge.export-json(); }
+                        }
+                    }
+
+                    if LayoutBridge.file-path != "" : HorizontalLayout {
+                        spacing: 12px;
+
+                        DarkCheckbox {
+                            text: "Auto-refresh (5s)";
+                            checked <=> LayoutBridge.auto-refresh;
+                        }
+
+                        Text {
+                            text: LayoutBridge.file-path;
+                            color: Theme.fg-secondary;
+                            font-size: 10px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+                    if LayoutBridge.status != "" : Text {
+                        text: LayoutBridge.status;
+                        color: Theme.fg-secondary;
+                        font-size: 11px;
+                    }
+
+                    // Keyboard render
+                    preview-area := Rectangle {
+                        height: 300px;
+                        background: Theme.bg-surface;
+                        border-radius: 8px;
+                        clip: true;
+
+                        property <float> scale-x: self.width / LayoutBridge.content-width;
+                        property <float> scale-y: self.height / LayoutBridge.content-height;
+                        property <float> scale: min(scale-x, scale-y) * 0.95;
+                        property <length> offset-x: (self.width - LayoutBridge.content-width * scale) / 2;
+                        property <length> offset-y: (self.height - LayoutBridge.content-height * scale) / 2;
+
+                        if LayoutBridge.keycaps.length == 0 : Text {
+                            text: "No layout loaded";
+                            color: Theme.fg-secondary;
+                            font-size: 13px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        for keycap[idx] in LayoutBridge.keycaps : Rectangle {
+                            x: preview-area.offset-x + keycap.x * preview-area.scale;
+                            y: preview-area.offset-y + keycap.y * preview-area.scale;
+                            width: keycap.w * preview-area.scale;
+                            height: keycap.h * preview-area.scale;
+                            background: transparent;
+
+                            Rectangle {
+                                width: 100%;
+                                height: 100%;
+                                border-radius: 4px;
+                                background: #44475a;
+                                border-width: 1px;
+                                border-color: Theme.bg-primary;
+                                transform-rotation: keycap.rotation * 1deg;
+                                transform-origin: {
+                                    x: self.width / 2,
+                                    y: self.height / 2,
+                                };
+
+                                Text {
+                                    text: keycap.label;
+                                    color: Theme.fg-primary;
+                                    font-size: max(7px, 11px * preview-area.scale);
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+
+                    // JSON preview
+                    Rectangle {
+                        height: 100px;
+                        background: Theme.bg-primary;
+                        border-radius: 4px;
+                        clip: true;
+
+                        ScrollView {
+                            Text {
+                                text: LayoutBridge.json-text != "" ? LayoutBridge.json-text : "// JSON will appear here";
+                                color: LayoutBridge.json-text != "" ? Theme.fg-primary : Theme.fg-secondary;
+                                font-size: 10px;
+                                font-family: "monospace";
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===================== ESP32 FLASHER =====================
+            Rectangle {
+                background: Theme.bg-secondary;
+                border-radius: 8px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+
+                    Text {
+                        text: "ESP32 Firmware Flasher";
+                        color: Theme.accent-cyan;
+                        font-size: 14px;
+                        font-weight: 600;
+                    }
+                    Text {
+                        text: "Flash via programming port (CH340/CP2102)";
+                        color: Theme.fg-secondary;
+                        font-size: 11px;
+                    }
+
+                    // Port
+                    HorizontalLayout {
+                        spacing: 8px;
+
+                        if FlasherBridge.prog-ports.length > 0 : DarkComboBox {
+                            horizontal-stretch: 1;
+                            model: FlasherBridge.prog-ports;
+                            selected(value) => { FlasherBridge.selected-prog-port = value; }
+                        }
+
+                        if FlasherBridge.prog-ports.length == 0 : DarkLineEdit {
+                            horizontal-stretch: 1;
+                            text <=> FlasherBridge.selected-prog-port;
+                            placeholder-text: "/dev/ttyUSB0";
+                        }
+
+                        DarkButton {
+                            text: "Refresh";
+                            clicked => { FlasherBridge.refresh-prog-ports(); }
+                        }
+                    }
+
+                    if FlasherBridge.prog-ports.length == 0 : Text {
+                        text: "No CH340/CP210x port detected. Enter path manually.";
+                        color: Theme.accent-yellow;
+                        font-size: 11px;
+                        wrap: word-wrap;
+                    }
+
+                    // Partition + firmware
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        DarkComboBox {
+                            width: 200px;
+                            model: ["factory (0x20000)", "ota\\_0 (0x220000)"];
+                            current-index <=> FlasherBridge.flash-offset-index;
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: FlasherBridge.firmware-path != "" ? FlasherBridge.firmware-path : "No file selected";
+                            color: FlasherBridge.firmware-path != "" ? Theme.fg-primary : Theme.fg-secondary;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+
+                        DarkButton {
+                            text: "Browse...";
+                            clicked => { FlasherBridge.browse-firmware(); }
+                        }
+                    }
+
+                    // Flash button + progress
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        DarkButton {
+                            text: FlasherBridge.flashing ? "Flashing..." : "Flash";
+                            primary: true;
+                            enabled: !FlasherBridge.flashing
+                                && FlasherBridge.firmware-path != ""
+                                && FlasherBridge.selected-prog-port != "";
+                            clicked => { FlasherBridge.flash(); }
+                        }
+
+                        Text {
+                            text: FlasherBridge.flash-status;
+                            color: Theme.fg-primary;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+                    if FlasherBridge.flashing || FlasherBridge.flash-progress > 0 : Rectangle {
+                        height: 20px;
+                        background: Theme.bg-primary;
+                        border-radius: 4px;
+
+                        Rectangle {
+                            x: 0;
+                            width: parent.width * clamp(FlasherBridge.flash-progress, 0, 1);
+                            height: 100%;
+                            background: FlasherBridge.flash-progress >= 1.0 ? Theme.accent-green : Theme.accent-purple;
+                            border-radius: 4px;
+                        }
+
+                        Text {
+                            text: round(FlasherBridge.flash-progress * 100) + "%";
+                            color: Theme.fg-primary;
+                            font-size: 11px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // Warning
+            Rectangle {
+                background: #ff555520;
+                border-radius: 8px;
+                border-width: 1px;
+                border-color: Theme.accent-red;
+
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 4px;
+
+                    Text {
+                        text: "Warning";
+                        color: Theme.accent-red;
+                        font-size: 13px;
+                        font-weight: 600;
+                    }
+                    Text {
+                        text: "Do not disconnect the keyboard during flashing. The device will reboot automatically when done.";
+                        color: Theme.fg-secondary;
+                        font-size: 11px;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+    }
+}

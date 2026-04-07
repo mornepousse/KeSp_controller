@@ -8,10 +8,10 @@ import { TabAdvanced } from "tabs/tab_advanced.slint";
 import { TabMacros } from "tabs/tab_macros.slint";
 import { TabStats } from "tabs/tab_stats.slint";
 import { TabSettings } from "tabs/tab_settings.slint";
-import { TabFlasher } from "tabs/tab_flasher.slint";
+import { TabTools } from "tabs/tab_tools.slint";
 
 export { AppState, Theme }
-export { ConnectionBridge, KeymapBridge, SettingsBridge, StatsBridge, AdvancedBridge, MacroBridge, FlasherBridge, KeySelectorBridge } from "globals.slint";
+export { ConnectionBridge, KeymapBridge, SettingsBridge, StatsBridge, AdvancedBridge, MacroBridge, FlasherBridge, KeySelectorBridge, LayoutBridge } from "globals.slint";
 
 component DarkTab inherits Rectangle {
     in property <string> title;
@@ -72,7 +72,7 @@ export component MainWindow inherits Window {
                 DarkTab { title: "Macros"; active: root.current-tab == 2; clicked => { root.current-tab = 2; AppState.tab-changed(2); } }
                 DarkTab { title: "Stats"; active: root.current-tab == 3; clicked => { root.current-tab = 3; AppState.tab-changed(3); } }
                 DarkTab { title: "Settings"; active: root.current-tab == 4; clicked => { root.current-tab = 4; AppState.tab-changed(4); } }
-                DarkTab { title: "Flash"; active: root.current-tab == 5; clicked => { root.current-tab = 5; AppState.tab-changed(5); } }
+                DarkTab { title: "Tools"; active: root.current-tab == 5; clicked => { root.current-tab = 5; AppState.tab-changed(5); } }
             }
         }
 
@@ -87,7 +87,7 @@ export component MainWindow inherits Window {
             if root.current-tab == 2 : TabMacros { }
             if root.current-tab == 3 : TabStats { }
             if root.current-tab == 4 : TabSettings { }
-            if root.current-tab == 5 : TabFlasher { }
+            if root.current-tab == 5 : TabTools { }
         }
 
         StatusBar { }

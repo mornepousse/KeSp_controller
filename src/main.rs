@@ -17,15 +17,26 @@ enum BgMsg {
     Keymap(Vec<Vec<u16>>),
     LayerNames(Vec<String>),
     Disconnected,
-    TextLines(String, Vec<String>), // tag, lines
+    #[allow(dead_code)]
+    TextLines(String, Vec<String>), // kept for OTA legacy compatibility
     HeatmapData(Vec<Vec<u32>>, u32), // counts, max
     BigramLines(Vec<String>),
     LayoutJson(Vec<KeycapPos>),
     MacroList(Vec<logic::parsers::MacroEntry>),
+    TdList(Vec<[u16; 4]>),
+    ComboList(Vec<logic::parsers::ComboEntry>),
+    LeaderList(Vec<logic::parsers::LeaderEntry>),
+    KoList(Vec<[u8; 4]>),
+    BtStatus(Vec<String>),
+    TamaStatus(Vec<String>),
+    AutoshiftStatus(String),
+    Wpm(u16),
     FlashProgress(f32, String),
     FlashDone(Result<(), String>),
     OtaProgress(f32, String),
     OtaDone(Result<(), String>),
+    ConfigProgress(f32, String),
+    ConfigDone(Result<String, String>),
 }
 
 fn build_keycap_model(keys: &[KeycapPos]) -> Rc<VecModel<KeycapData>> {
@@ -311,6 +322,263 @@ fn mod_idx_to_byte(idx: i32) -> u8 {
     }
 }
 
+/// Export all keyboard config to JSON file via rfd save dialog.
+/// Uses binary protocol v2 for all queries (fast, no text parsing).
+fn export_config(
+    serial: &Arc<Mutex<SerialManager>>,
+    tx: &mpsc::Sender<BgMsg>,
+) -> Result<String, String> {
+    use logic::binary_protocol::cmd;
+    use logic::config_io::*;
+
+    let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+
+    // 1. Layer names (binary LIST_LAYOUTS 0x21)
+    let _ = tx.send(BgMsg::ConfigProgress(0.05, "Reading layer names...".into()));
+    let layer_names = ser.get_layer_names().unwrap_or_default();
+    let num_layers = layer_names.len().max(1);
+
+    // 2. Keymaps — binary KEYMAP_GET per layer
+    let mut keymaps = Vec::new();
+    for layer in 0..num_layers {
+        let progress = 0.05 + (layer as f32 / num_layers as f32) * 0.30;
+        let _ = tx.send(BgMsg::ConfigProgress(progress, format!("Reading layer {}...", layer)));
+        let km = ser.get_keymap(layer as u8).unwrap_or_default();
+        keymaps.push(km);
+    }
+
+    // 3. Tap dances — binary TD_LIST (0x51)
+    let _ = tx.send(BgMsg::ConfigProgress(0.40, "Reading tap dances...".into()));
+    let tap_dances = match ser.send_binary(cmd::TD_LIST, &[]) {
+        Ok(resp) => {
+            let td_raw = logic::parsers::parse_td_binary(&resp.payload);
+            td_raw.iter().enumerate()
+                .filter(|(_, actions)| actions.iter().any(|&a| a != 0))
+                .map(|(i, actions)| TdConfig { index: i as u8, actions: *actions })
+                .collect()
+        }
+        Err(_) => Vec::new(),
+    };
+
+    // 4. Combos — binary COMBO_LIST (0x61)
+    let _ = tx.send(BgMsg::ConfigProgress(0.50, "Reading combos...".into()));
+    let combos = match ser.send_binary(cmd::COMBO_LIST, &[]) {
+        Ok(resp) => {
+            logic::parsers::parse_combo_binary(&resp.payload).iter().map(|c| ComboConfig {
+                index: c.index, r1: c.r1, c1: c.c1, r2: c.r2, c2: c.c2, result: c.result,
+            }).collect()
+        }
+        Err(_) => Vec::new(),
+    };
+
+    // 5. Key overrides — binary KO_LIST (0x92)
+    let _ = tx.send(BgMsg::ConfigProgress(0.60, "Reading key overrides...".into()));
+    let key_overrides = match ser.send_binary(cmd::KO_LIST, &[]) {
+        Ok(resp) => {
+            logic::parsers::parse_ko_binary(&resp.payload).iter().map(|ko| KoConfig {
+                trigger_key: ko[0], trigger_mod: ko[1], result_key: ko[2], result_mod: ko[3],
+            }).collect()
+        }
+        Err(_) => Vec::new(),
+    };
+
+    // 6. Leaders — binary LEADER_LIST (0x71)
+    let _ = tx.send(BgMsg::ConfigProgress(0.70, "Reading leaders...".into()));
+    let leaders = match ser.send_binary(cmd::LEADER_LIST, &[]) {
+        Ok(resp) => {
+            logic::parsers::parse_leader_binary(&resp.payload).iter().map(|l| LeaderConfig {
+                index: l.index, sequence: l.sequence.clone(), result: l.result, result_mod: l.result_mod,
+            }).collect()
+        }
+        Err(_) => Vec::new(),
+    };
+
+    // 7. Macros — binary LIST_MACROS (0x30)
+    let _ = tx.send(BgMsg::ConfigProgress(0.80, "Reading macros...".into()));
+    let macros = match ser.send_binary(cmd::LIST_MACROS, &[]) {
+        Ok(resp) => {
+            logic::parsers::parse_macros_binary(&resp.payload).iter().map(|m| {
+                let steps_str: Vec<String> = m.steps.iter()
+                    .map(|s| format!("{:02X}:{:02X}", s.keycode, s.modifier))
+                    .collect();
+                MacroConfig { slot: m.slot, name: m.name.clone(), steps: steps_str.join(",") }
+            }).collect()
+        }
+        Err(_) => Vec::new(),
+    };
+
+    drop(ser); // Release serial lock before file dialog
+
+    let _ = tx.send(BgMsg::ConfigProgress(0.90, "Saving file...".into()));
+
+    let config = KeyboardConfig {
+        version: 1,
+        layer_names,
+        keymaps,
+        tap_dances,
+        combos,
+        key_overrides,
+        leaders,
+        macros,
+    };
+
+    let json = config.to_json()?;
+
+    let file = rfd::FileDialog::new()
+        .add_filter("KeSp Config", &["json"])
+        .set_file_name("kesp_config.json")
+        .save_file();
+
+    match file {
+        Some(path) => {
+            std::fs::write(&path, &json).map_err(|e| format!("Write error: {}", e))?;
+            Ok(format!("Exported to {}", path.display()))
+        }
+        None => Ok("Export cancelled".into()),
+    }
+}
+
+/// Import keyboard config using binary protocol v2.
+/// SETLAYER sends a full layer in one frame (~131 bytes) instead of 65 individual SETKEY.
+fn import_config(
+    serial: &Arc<Mutex<SerialManager>>,
+    tx: &mpsc::Sender<BgMsg>,
+    config: &logic::config_io::KeyboardConfig,
+) -> Result<String, String> {
+    use logic::binary_protocol as bp;
+
+    let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+    let mut errors = 0usize;
+
+    let total_steps = (config.layer_names.len()
+        + config.keymaps.len()  // 1 SETLAYER per layer (not per key!)
+        + config.tap_dances.len()
+        + config.combos.len()
+        + config.key_overrides.len()
+        + config.leaders.len()
+        + config.macros.len())
+        .max(1) as f32;
+    let mut done = 0usize;
+
+    // 1. Layer names — binary SET_LAYOUT_NAME (0x20)
+    let _ = tx.send(BgMsg::ConfigProgress(0.0, "Setting layer names...".into()));
+    for (i, name) in config.layer_names.iter().enumerate() {
+        let payload = bp::set_layout_name_payload(i as u8, name);
+        if ser.send_binary(bp::cmd::SET_LAYOUT_NAME, &payload).is_err() { errors += 1; }
+        done += 1;
+    }
+
+    // 2. Keymaps — binary SETLAYER (0x10): one frame per layer!
+    for (layer, km) in config.keymaps.iter().enumerate() {
+        let progress = done as f32 / total_steps;
+        let _ = tx.send(BgMsg::ConfigProgress(progress, format!("Writing layer {}...", layer)));
+        let payload = bp::setlayer_payload(layer as u8, km);
+        if let Err(e) = ser.send_binary(bp::cmd::SETLAYER, &payload) {
+            eprintln!("SETLAYER {} failed: {}", layer, e);
+            errors += 1;
+        }
+        done += 1;
+    }
+
+    // 3. Tap dances — binary TD_SET (0x50)
+    let _ = tx.send(BgMsg::ConfigProgress(done as f32 / total_steps, "Setting tap dances...".into()));
+    for td in &config.tap_dances {
+        let payload = bp::td_set_payload(td.index, &td.actions);
+        if ser.send_binary(bp::cmd::TD_SET, &payload).is_err() { errors += 1; }
+        done += 1;
+    }
+
+    // 4. Combos — binary COMBO_SET (0x60)
+    let _ = tx.send(BgMsg::ConfigProgress(done as f32 / total_steps, "Setting combos...".into()));
+    for combo in &config.combos {
+        let payload = bp::combo_set_payload(combo.index, combo.r1, combo.c1, combo.r2, combo.c2, combo.result as u8);
+        if ser.send_binary(bp::cmd::COMBO_SET, &payload).is_err() { errors += 1; }
+        done += 1;
+    }
+
+    // 5. Key overrides — binary KO_SET (0x91)
+    let _ = tx.send(BgMsg::ConfigProgress(done as f32 / total_steps, "Setting key overrides...".into()));
+    for (i, ko) in config.key_overrides.iter().enumerate() {
+        let payload = bp::ko_set_payload(i as u8, ko.trigger_key, ko.trigger_mod, ko.result_key, ko.result_mod);
+        if ser.send_binary(bp::cmd::KO_SET, &payload).is_err() { errors += 1; }
+        done += 1;
+    }
+
+    // 6. Leaders — binary LEADER_SET (0x70)
+    let _ = tx.send(BgMsg::ConfigProgress(done as f32 / total_steps, "Setting leaders...".into()));
+    for leader in &config.leaders {
+        let payload = bp::leader_set_payload(leader.index, &leader.sequence, leader.result, leader.result_mod);
+        if ser.send_binary(bp::cmd::LEADER_SET, &payload).is_err() { errors += 1; }
+        done += 1;
+    }
+
+    // 7. Macros — binary MACRO_ADD_SEQ (0x32)
+    let _ = tx.send(BgMsg::ConfigProgress(done as f32 / total_steps, "Setting macros...".into()));
+    for m in &config.macros {
+        let payload = bp::macro_add_seq_payload(m.slot, &m.name, &m.steps);
+        if ser.send_binary(bp::cmd::MACRO_ADD_SEQ, &payload).is_err() { errors += 1; }
+    }
+
+    // 8. Refresh UI
+    let _ = tx.send(BgMsg::ConfigProgress(0.95, "Refreshing...".into()));
+    let names = ser.get_layer_names().unwrap_or_default();
+    let km = ser.get_keymap(0).unwrap_or_default();
+    let _ = tx.send(BgMsg::LayerNames(names));
+    let _ = tx.send(BgMsg::Keymap(km));
+
+    let total_keys: usize = config.keymaps.iter()
+        .map(|l| l.iter().map(|r| r.len()).sum::<usize>())
+        .sum();
+
+    if errors > 0 {
+        Ok(format!("Import done with {} errors (check stderr)", errors))
+    } else {
+        Ok(format!("Imported: {} layers, {} keys, {} TD, {} combos, {} KO, {} leaders, {} macros",
+            config.layer_names.len(),
+            total_keys,
+            config.tap_dances.len(),
+            config.combos.len(),
+            config.key_overrides.len(),
+            config.leaders.len(),
+            config.macros.len(),
+        ))
+    }
+}
+
+/// Populate LayoutBridge with parsed JSON layout for preview.
+fn populate_layout_preview(window: &MainWindow, json: &str) {
+    let lb = window.global::<LayoutBridge>();
+    match logic::layout::parse_json(json) {
+        Ok(keys) => {
+            let keycaps: Vec<KeycapData> = keys.iter().enumerate().map(|(idx, kp)| KeycapData {
+                x: kp.x, y: kp.y, w: kp.w, h: kp.h,
+                rotation: kp.angle,
+                rotation_cx: kp.w / 2.0, rotation_cy: kp.h / 2.0,
+                label: SharedString::from(format!("R{}C{}", kp.row, kp.col)),
+                sublabel: SharedString::default(),
+                keycode: 0, color: slint::Color::from_argb_u8(255, 0x44, 0x47, 0x5a),
+                heat: 0.0, selected: false, index: idx as i32,
+            }).collect();
+            // Compute content bounds
+            let max_x = keys.iter().map(|k| k.x + k.w).fold(0.0f32, f32::max);
+            let max_y = keys.iter().map(|k| k.y + k.h).fold(0.0f32, f32::max);
+            lb.set_content_width(max_x + 20.0);
+            lb.set_content_height(max_y + 20.0);
+            lb.set_keycaps(ModelRc::from(Rc::new(VecModel::from(keycaps))));
+            lb.set_status(SharedString::from(format!("{} keys loaded", keys.len())));
+            // Pretty-print JSON for display and export
+            let pretty_json = serde_json::from_str::<serde_json::Value>(json)
+                .and_then(|v| serde_json::to_string_pretty(&v))
+                .unwrap_or_else(|_| json.to_string());
+            lb.set_json_text(SharedString::from(pretty_json));
+        }
+        Err(e) => {
+            lb.set_status(SharedString::from(format!("Parse error: {}", e)));
+            lb.set_json_text(SharedString::from(json));
+        }
+    }
+}
+
 fn main() {
     let keys = logic::layout::default_layout();
     let keys_arc: Rc<std::cell::RefCell<Vec<KeycapPos>>> = Rc::new(std::cell::RefCell::new(keys.clone()));
@@ -475,13 +743,12 @@ fn main() {
         let window_weak = window.as_weak();
 
         keymap_bridge.on_rename_layer(move |layer_idx, new_name| {
-            let cmd = logic::protocol::cmd_set_layer_name(layer_idx as u8, &new_name);
+            let payload = logic::binary_protocol::set_layout_name_payload(layer_idx as u8, &new_name);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                let _ = ser.send_binary(logic::binary_protocol::cmd::SET_LAYOUT_NAME, &payload);
                 if let Ok(names) = ser.get_layer_names() {
                     let _ = tx.send(BgMsg::LayerNames(names));
                 }
@@ -504,9 +771,10 @@ fn main() {
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let lines = ser.query_command("KEYSTATS?").unwrap_or_default();
-                let (data, max) = logic::parsers::parse_heatmap_lines(&lines);
-                let _ = tx.send(BgMsg::HeatmapData(data, max));
+                if let Ok(resp) = ser.send_binary(logic::binary_protocol::cmd::KEYSTATS_BIN, &[]) {
+                    let (data, max) = logic::parsers::parse_keystats_binary(&resp.payload);
+                    let _ = tx.send(BgMsg::HeatmapData(data, max));
+                }
             });
         });
     }
@@ -573,13 +841,24 @@ fn main() {
             let tx = tx.clone();
             match tab_idx {
                 1 => {
-                    // Advanced: refresh TD, combo, leader, KO, BT
+                    // Advanced: refresh TD, combo, leader, KO, BT via binary
                     std::thread::spawn(move || {
+                        use logic::binary_protocol::cmd;
                         let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                        for (tag, cmd) in [("td", "TD?"), ("combo", "COMBO?"), ("leader", "LEADER?"), ("ko", "KO?"), ("bt", "BT?")] {
-                            std::thread::sleep(std::time::Duration::from_millis(50));
-                            let lines = ser.query_command(cmd).unwrap_or_default();
-                            let _ = tx.send(BgMsg::TextLines(tag.into(), lines));
+                        if let Ok(r) = ser.send_binary(cmd::TD_LIST, &[]) {
+                            let _ = tx.send(BgMsg::TdList(logic::parsers::parse_td_binary(&r.payload)));
+                        }
+                        if let Ok(r) = ser.send_binary(cmd::COMBO_LIST, &[]) {
+                            let _ = tx.send(BgMsg::ComboList(logic::parsers::parse_combo_binary(&r.payload)));
+                        }
+                        if let Ok(r) = ser.send_binary(cmd::LEADER_LIST, &[]) {
+                            let _ = tx.send(BgMsg::LeaderList(logic::parsers::parse_leader_binary(&r.payload)));
+                        }
+                        if let Ok(r) = ser.send_binary(cmd::KO_LIST, &[]) {
+                            let _ = tx.send(BgMsg::KoList(logic::parsers::parse_ko_binary(&r.payload)));
+                        }
+                        if let Ok(r) = ser.send_binary(cmd::BT_QUERY, &[]) {
+                            let _ = tx.send(BgMsg::BtStatus(logic::parsers::parse_bt_binary(&r.payload)));
                         }
                     });
                 }
@@ -594,14 +873,18 @@ fn main() {
                     });
                 }
                 3 => {
-                    // Stats: refresh heatmap + bigrams
+                    // Stats: refresh heatmap + bigrams via binary
                     std::thread::spawn(move || {
+                        use logic::binary_protocol::cmd;
                         let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                        let lines = ser.query_command("KEYSTATS?").unwrap_or_default();
-                        let (data, max) = logic::parsers::parse_heatmap_lines(&lines);
-                        let _ = tx.send(BgMsg::HeatmapData(data, max));
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                        let bigram_lines = ser.query_command("BIGRAMS?").unwrap_or_default();
+                        if let Ok(r) = ser.send_binary(cmd::KEYSTATS_BIN, &[]) {
+                            let (data, max) = logic::parsers::parse_keystats_binary(&r.payload);
+                            let _ = tx.send(BgMsg::HeatmapData(data, max));
+                        }
+                        // Bigrams: keep text query (binary format needs dedicated parser)
+                        let bigram_lines = if let Ok(r) = ser.send_binary(logic::binary_protocol::cmd::BIGRAMS_TEXT, &[]) {
+                            String::from_utf8_lossy(&r.payload).lines().map(|l| l.to_string()).collect()
+                        } else { Vec::new() };
                         let _ = tx.send(BgMsg::BigramLines(bigram_lines));
                     });
                 }
@@ -697,11 +980,11 @@ fn main() {
             let keycaps = w.global::<KeymapBridge>().get_keycaps();
             update_keycap_labels(&keycaps, &keys, &km, &layout);
 
-            let cmd = logic::protocol::cmd_set_key(layer, row as u8, col as u8, code);
+            let payload = logic::binary_protocol::setkey_payload(layer, row as u8, col as u8, code);
             let serial = serial.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::SETKEY, &payload);
             });
 
             w.global::<AppState>().set_status_text(
@@ -946,13 +1229,15 @@ fn main() {
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let lines = ser.query_command("KEYSTATS?").unwrap_or_default();
-                let (data, max) = logic::parsers::parse_heatmap_lines(&lines);
-                let _ = tx.send(BgMsg::HeatmapData(data, max));
-                // Also fetch bigrams (delay to avoid serial confusion)
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let bigram_lines = ser.query_command("BIGRAMS?").unwrap_or_default();
+                if let Ok(r) = ser.send_binary(cmd::KEYSTATS_BIN, &[]) {
+                    let (data, max) = logic::parsers::parse_keystats_binary(&r.payload);
+                    let _ = tx.send(BgMsg::HeatmapData(data, max));
+                }
+                let bigram_lines = if let Ok(r) = ser.send_binary(logic::binary_protocol::cmd::BIGRAMS_TEXT, &[]) {
+                    String::from_utf8_lossy(&r.payload).lines().map(|l| l.to_string()).collect()
+                } else { Vec::new() };
                 let _ = tx.send(BgMsg::BigramLines(bigram_lines));
             });
         });
@@ -967,12 +1252,22 @@ fn main() {
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let queries = [("td", "TD?"), ("combo", "COMBO?"), ("leader", "LEADER?"), ("ko", "KO?"), ("bt", "BT?")];
-                for (tag, cmd) in queries {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                    let lines = ser.query_command(cmd).unwrap_or_default();
-                    let _ = tx.send(BgMsg::TextLines((*tag).into(), lines));
+                if let Ok(r) = ser.send_binary(cmd::TD_LIST, &[]) {
+                    let _ = tx.send(BgMsg::TdList(logic::parsers::parse_td_binary(&r.payload)));
+                }
+                if let Ok(r) = ser.send_binary(cmd::COMBO_LIST, &[]) {
+                    let _ = tx.send(BgMsg::ComboList(logic::parsers::parse_combo_binary(&r.payload)));
+                }
+                if let Ok(r) = ser.send_binary(cmd::LEADER_LIST, &[]) {
+                    let _ = tx.send(BgMsg::LeaderList(logic::parsers::parse_leader_binary(&r.payload)));
+                }
+                if let Ok(r) = ser.send_binary(cmd::KO_LIST, &[]) {
+                    let _ = tx.send(BgMsg::KoList(logic::parsers::parse_ko_binary(&r.payload)));
+                }
+                if let Ok(r) = ser.send_binary(cmd::BT_QUERY, &[]) {
+                    let _ = tx.send(BgMsg::BtStatus(logic::parsers::parse_bt_binary(&r.payload)));
                 }
             });
         });
@@ -986,13 +1281,13 @@ fn main() {
         window.global::<AdvancedBridge>().on_delete_combo(move |idx| {
             let serial = serial.clone();
             let tx = tx.clone();
-            let cmd = logic::protocol::cmd_combodel(idx as u8);
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let lines = ser.query_command("COMBO?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("combo".into(), lines));
+                let _ = ser.send_binary(cmd::COMBO_DELETE, &[idx as u8]);
+                if let Ok(r) = ser.send_binary(cmd::COMBO_LIST, &[]) {
+                    let _ = tx.send(BgMsg::ComboList(logic::parsers::parse_combo_binary(&r.payload)));
+                }
             });
         });
     }
@@ -1005,13 +1300,13 @@ fn main() {
         window.global::<AdvancedBridge>().on_delete_leader(move |idx| {
             let serial = serial.clone();
             let tx = tx.clone();
-            let cmd = logic::protocol::cmd_leaderdel(idx as u8);
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let lines = ser.query_command("LEADER?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("leader".into(), lines));
+                let _ = ser.send_binary(cmd::LEADER_DELETE, &[idx as u8]);
+                if let Ok(r) = ser.send_binary(cmd::LEADER_LIST, &[]) {
+                    let _ = tx.send(BgMsg::LeaderList(logic::parsers::parse_leader_binary(&r.payload)));
+                }
             });
         });
     }
@@ -1024,13 +1319,13 @@ fn main() {
         window.global::<AdvancedBridge>().on_delete_ko(move |idx| {
             let serial = serial.clone();
             let tx = tx.clone();
-            let cmd = logic::protocol::cmd_kodel(idx as u8);
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let lines = ser.query_command("KO?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("ko".into(), lines));
+                let _ = ser.send_binary(cmd::KO_DELETE, &[idx as u8]);
+                if let Ok(r) = ser.send_binary(cmd::KO_LIST, &[]) {
+                    let _ = tx.send(BgMsg::KoList(logic::parsers::parse_ko_binary(&r.payload)));
+                }
             });
         });
     }
@@ -1041,14 +1336,11 @@ fn main() {
         let window_weak = window.as_weak();
 
         window.global::<AdvancedBridge>().on_set_trilayer(move |l1, l2, l3| {
-            let l1 = l1 as u8;
-            let l2 = l2 as u8;
-            let l3 = l3 as u8;
-            let cmd = logic::protocol::cmd_trilayer(l1, l2, l3);
+            let payload = vec![l1 as u8, l2 as u8, l3 as u8];
             let serial = serial.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::TRILAYER_SET, &payload);
             });
             if let Some(w) = window_weak.upgrade() {
                 w.global::<AppState>().set_status_text(
@@ -1063,11 +1355,10 @@ fn main() {
         let serial = serial.clone();
 
         window.global::<AdvancedBridge>().on_bt_switch(move |slot| {
-            let cmd = logic::protocol::cmd_bt_switch(slot as u8);
             let serial = serial.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::BT_SWITCH, &[slot as u8]);
             });
         });
     }
@@ -1078,22 +1369,23 @@ fn main() {
         let tx = bg_tx.clone();
 
         window.global::<AdvancedBridge>().on_tama_action(move |action| {
-            let cmd = match action.as_str() {
-                "feed" => "TAMA FEED",
-                "play" => "TAMA PLAY",
-                "sleep" => "TAMA SLEEP",
-                "meds" => "TAMA MEDS",
-                "toggle" => "TAMA TOGGLE",
+            use logic::binary_protocol::cmd;
+            let action_cmd = match action.as_str() {
+                "feed" => cmd::TAMA_FEED,
+                "play" => cmd::TAMA_PLAY,
+                "sleep" => cmd::TAMA_SLEEP,
+                "meds" => cmd::TAMA_MEDICINE,
+                "toggle" => cmd::TAMA_ENABLE, // toggle handled by firmware
                 _ => return,
             };
             let serial = serial.clone();
             let tx = tx.clone();
-            let cmd = cmd.to_string();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                let lines = ser.query_command("TAMA?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("tama".into(), lines));
+                let _ = ser.send_binary(action_cmd, &[]);
+                if let Ok(r) = ser.send_binary(cmd::TAMA_QUERY, &[]) {
+                    let _ = tx.send(BgMsg::TamaStatus(logic::parsers::parse_tama_binary(&r.payload)));
+                }
             });
         });
     }
@@ -1108,9 +1400,16 @@ fn main() {
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command("AUTOSHIFT TOGGLE");
-                let lines = ser.query_command("AUTOSHIFT?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("autoshift".into(), lines));
+                match ser.send_binary(logic::binary_protocol::cmd::AUTOSHIFT_TOGGLE, &[]) {
+                    Ok(r) => {
+                        let enabled = r.payload.first().copied().unwrap_or(0);
+                        let status = if enabled != 0 { "Autoshift: ON" } else { "Autoshift: OFF" };
+                        let _ = tx.send(BgMsg::AutoshiftStatus(status.to_string()));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(BgMsg::AutoshiftStatus(format!("Error: {}", e)));
+                    }
+                }
             });
         });
     }
@@ -1136,15 +1435,16 @@ fn main() {
                 return;
             }
             let next_idx = adv.get_combos().row_count() as u8;
-            let cmd = logic::protocol::cmd_comboset(next_idx, r1, c1, r2, c2, result);
+            let payload = logic::binary_protocol::combo_set_payload(next_idx, r1, c1, r2, c2, result);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let lines = ser.query_command("COMBO?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("combo".into(), lines));
+                let _ = ser.send_binary(cmd::COMBO_SET, &payload);
+                if let Ok(r) = ser.send_binary(cmd::COMBO_LIST, &[]) {
+                    let _ = tx.send(BgMsg::ComboList(logic::parsers::parse_combo_binary(&r.payload)));
+                }
             });
             w.global::<AppState>().set_status_text("Creating combo...".into());
         });
@@ -1168,15 +1468,16 @@ fn main() {
                 | ((adv.get_new_ko_res_shift() as u8) << 1)
                 | ((adv.get_new_ko_res_alt() as u8) << 2);
             let next_idx = adv.get_key_overrides().row_count() as u8;
-            let cmd = logic::protocol::cmd_koset(next_idx, trig, trig_mod, result, res_mod);
+            let payload = logic::binary_protocol::ko_set_payload(next_idx, trig, trig_mod, result, res_mod);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let lines = ser.query_command("KO?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("ko".into(), lines));
+                let _ = ser.send_binary(cmd::KO_SET, &payload);
+                if let Ok(r) = ser.send_binary(cmd::KO_LIST, &[]) {
+                    let _ = tx.send(BgMsg::KoList(logic::parsers::parse_ko_binary(&r.payload)));
+                }
             });
             w.global::<AppState>().set_status_text("Creating key override...".into());
         });
@@ -1200,15 +1501,16 @@ fn main() {
             let result = result_code as u8;
             let result_mod = mod_idx_to_byte(mod_idx);
             let next_idx = adv.get_leaders().row_count() as u8;
-            let cmd = logic::protocol::cmd_leaderset(next_idx, &sequence, result, result_mod);
+            let payload = logic::binary_protocol::leader_set_payload(next_idx, &sequence, result, result_mod);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let lines = ser.query_command("LEADER?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("leader".into(), lines));
+                let _ = ser.send_binary(cmd::LEADER_SET, &payload);
+                if let Ok(r) = ser.send_binary(cmd::LEADER_LIST, &[]) {
+                    let _ = tx.send(BgMsg::LeaderList(logic::parsers::parse_leader_binary(&r.payload)));
+                }
             });
             if let Some(w) = window_weak.upgrade() {
                 w.global::<AppState>().set_status_text("Creating leader key...".into());
@@ -1232,9 +1534,8 @@ fn main() {
                         let _ = tx.send(BgMsg::MacroList(macros));
                     }
                 } else {
-                    let lines = ser.query_command("MACROS?").unwrap_or_default();
-                    let macros = logic::parsers::parse_macro_lines(&lines);
-                    let _ = tx.send(BgMsg::MacroList(macros));
+                    // Legacy fallback — should not happen with v2 firmware
+                    let _ = ser.send_binary(logic::binary_protocol::cmd::LIST_MACROS, &[]);
                 }
             });
         });
@@ -1293,15 +1594,15 @@ fn main() {
             }).collect();
             let steps_text = steps_str.join(",");
             drop(steps);
-            let cmd = logic::protocol::cmd_macroseq(slot_num, &name, &steps_text);
+            let payload = logic::binary_protocol::macro_add_seq_payload(slot_num, &name, &steps_text);
 
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                if let Ok(resp) = ser.send_binary(logic::binary_protocol::cmd::LIST_MACROS, &[]) {
+                let _ = ser.send_binary(cmd::MACRO_ADD_SEQ, &payload);
+                if let Ok(resp) = ser.send_binary(cmd::LIST_MACROS, &[]) {
                     let macros = logic::parsers::parse_macros_binary(&resp.payload);
                     let _ = tx.send(BgMsg::MacroList(macros));
                 }
@@ -1318,14 +1619,16 @@ fn main() {
         let tx = bg_tx.clone();
 
         window.global::<MacroBridge>().on_delete_macro(move |slot| {
-            let cmd = logic::protocol::cmd_macro_del(slot as u8);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use logic::binary_protocol::cmd;
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
-                let lines = ser.query_command("MACROS?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("macros".into(), lines));
+                let _ = ser.send_binary(cmd::MACRO_DELETE, &logic::binary_protocol::macro_delete_payload(slot as u8));
+                if let Ok(resp) = ser.send_binary(cmd::LIST_MACROS, &[]) {
+                    let macros = logic::parsers::parse_macros_binary(&resp.payload);
+                    let _ = tx.send(BgMsg::MacroList(macros));
+                }
             });
         });
     }
@@ -1478,6 +1781,76 @@ fn main() {
         });
     }
 
+    // --- Config Export ---
+    {
+        let serial = serial.clone();
+        let tx = bg_tx.clone();
+        let window_weak = window.as_weak();
+
+        window.global::<SettingsBridge>().on_config_export(move || {
+            let Some(w) = window_weak.upgrade() else { return };
+            w.global::<SettingsBridge>().set_config_busy(true);
+            w.global::<SettingsBridge>().set_config_progress(0.0);
+            w.global::<SettingsBridge>().set_config_status(SharedString::from("Reading config..."));
+
+            let serial = serial.clone();
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                let result = export_config(&serial, &tx);
+                let _ = tx.send(BgMsg::ConfigDone(result));
+            });
+        });
+    }
+
+    // --- Config Import ---
+    {
+        let serial = serial.clone();
+        let tx = bg_tx.clone();
+        let window_weak = window.as_weak();
+
+        window.global::<SettingsBridge>().on_config_import(move || {
+            let serial = serial.clone();
+            let tx = tx.clone();
+            let window_weak = window_weak.clone();
+            std::thread::spawn(move || {
+                let file = rfd::FileDialog::new()
+                    .add_filter("KeSp Config", &["json"])
+                    .pick_file();
+                let Some(path) = file else { return };
+
+                let _ = slint::invoke_from_event_loop({
+                    let window_weak = window_weak.clone();
+                    move || {
+                        if let Some(w) = window_weak.upgrade() {
+                            let s = w.global::<SettingsBridge>();
+                            s.set_config_busy(true);
+                            s.set_config_progress(0.0);
+                            s.set_config_status(SharedString::from("Importing config..."));
+                        }
+                    }
+                });
+
+                let json = match std::fs::read_to_string(&path) {
+                    Ok(j) => j,
+                    Err(e) => {
+                        let _ = tx.send(BgMsg::ConfigDone(Err(format!("Read error: {}", e))));
+                        return;
+                    }
+                };
+                let config = match logic::config_io::KeyboardConfig::from_json(&json) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = tx.send(BgMsg::ConfigDone(Err(format!("Parse error: {}", e))));
+                        return;
+                    }
+                };
+
+                let result = import_config(&serial, &tx, &config);
+                let _ = tx.send(BgMsg::ConfigDone(result));
+            });
+        });
+    }
+
     // --- Flasher: refresh prog ports ---
     {
         let window_weak = window.as_weak();
@@ -1580,6 +1953,109 @@ fn main() {
         window.global::<FlasherBridge>().set_prog_ports(
             ModelRc::from(Rc::new(VecModel::from(model)))
         );
+    }
+
+    // --- Layout preview: load from file ---
+    {
+        let window_weak = window.as_weak();
+        window.global::<LayoutBridge>().on_load_from_file(move || {
+            let window_weak = window_weak.clone();
+            std::thread::spawn(move || {
+                let file = rfd::FileDialog::new()
+                    .add_filter("Layout JSON", &["json"])
+                    .pick_file();
+                let Some(path) = file else { return };
+                let json = match std::fs::read_to_string(&path) {
+                    Ok(j) => j,
+                    Err(e) => {
+                        let err = format!("Read error: {}", e);
+                        let _ = slint::invoke_from_event_loop({
+                            let window_weak = window_weak.clone();
+                            move || {
+                                if let Some(w) = window_weak.upgrade() {
+                                    w.global::<LayoutBridge>().set_status(SharedString::from(err));
+                                }
+                            }
+                        });
+                        return;
+                    }
+                };
+                let path_str = path.to_string_lossy().to_string();
+                let _ = slint::invoke_from_event_loop({
+                    let window_weak = window_weak.clone();
+                    move || {
+                        if let Some(w) = window_weak.upgrade() {
+                            w.global::<LayoutBridge>().set_file_path(SharedString::from(&path_str));
+                            populate_layout_preview(&w, &json);
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    // --- Layout preview: load from keyboard ---
+    {
+        let serial = serial.clone();
+        let window_weak = window.as_weak();
+        window.global::<LayoutBridge>().on_load_from_keyboard(move || {
+            let serial = serial.clone();
+            let window_weak = window_weak.clone();
+            std::thread::spawn(move || {
+                let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                let json = match ser.get_layout_json() {
+                    Ok(j) => j,
+                    Err(e) => {
+                        let err = format!("Error: {}", e);
+                        let _ = slint::invoke_from_event_loop({
+                            let window_weak = window_weak.clone();
+                            move || {
+                                if let Some(w) = window_weak.upgrade() {
+                                    w.global::<LayoutBridge>().set_status(SharedString::from(err));
+                                }
+                            }
+                        });
+                        return;
+                    }
+                };
+                let _ = slint::invoke_from_event_loop({
+                    let window_weak = window_weak.clone();
+                    move || {
+                        if let Some(w) = window_weak.upgrade() {
+                            populate_layout_preview(&w, &json);
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    // --- Layout preview: export JSON ---
+    {
+        let window_weak = window.as_weak();
+        window.global::<LayoutBridge>().on_export_json(move || {
+            let Some(w) = window_weak.upgrade() else { return };
+            let json = w.global::<LayoutBridge>().get_json_text().to_string();
+            if json.is_empty() { return; }
+            let window_weak = window_weak.clone();
+            std::thread::spawn(move || {
+                let file = rfd::FileDialog::new()
+                    .add_filter("Layout JSON", &["json"])
+                    .set_file_name("layout.json")
+                    .save_file();
+                if let Some(path) = file {
+                    let msg = match std::fs::write(&path, &json) {
+                        Ok(()) => format!("Exported to {}", path.display()),
+                        Err(e) => format!("Write error: {}", e),
+                    };
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(w) = window_weak.upgrade() {
+                            w.global::<LayoutBridge>().set_status(SharedString::from(msg));
+                        }
+                    });
+                }
+            });
+        });
     }
 
     // --- Poll background messages via timer ---
@@ -1766,124 +2242,91 @@ fn main() {
                                 SharedString::from(format!("Stats loaded ({} total presses, max {})", balance.total, max))
                             );
                         }
-                        BgMsg::TextLines(tag, lines) => {
-                            match tag.as_str() {
-                                "td" => {
-                                    let td_data = logic::parsers::parse_td_lines(&lines);
-                                    let model: Vec<TapDanceData> = td_data.iter().enumerate()
-                                        .filter(|(_, actions)| actions.iter().any(|&a| a != 0))
-                                        .map(|(i, actions)| TapDanceData {
-                                            index: i as i32,
-                                            actions: ModelRc::from(Rc::new(VecModel::from(
-                                                actions.iter().map(|&a| TapDanceAction {
-                                                    name: SharedString::from(keycode::decode_keycode(a)),
-                                                    code: a as i32,
-                                                }).collect::<Vec<_>>()
-                                            ))),
-                                        })
-                                        .collect();
-                                    window.global::<AdvancedBridge>().set_tap_dances(
-                                        ModelRc::from(Rc::new(VecModel::from(model)))
-                                    );
+                        BgMsg::TextLines(_tag, _lines) => {
+                            // Legacy text handler — kept for OTA compatibility only
+                        }
+                        BgMsg::TdList(td_data) => {
+                            let model: Vec<TapDanceData> = td_data.iter().enumerate()
+                                .filter(|(_, actions)| actions.iter().any(|&a| a != 0))
+                                .map(|(i, actions)| TapDanceData {
+                                    index: i as i32,
+                                    actions: ModelRc::from(Rc::new(VecModel::from(
+                                        actions.iter().map(|&a| TapDanceAction {
+                                            name: SharedString::from(keycode::decode_keycode(a)),
+                                            code: a as i32,
+                                        }).collect::<Vec<_>>()
+                                    ))),
+                                })
+                                .collect();
+                            window.global::<AdvancedBridge>().set_tap_dances(
+                                ModelRc::from(Rc::new(VecModel::from(model)))
+                            );
+                        }
+                        BgMsg::ComboList(combo_data) => {
+                            let model: Vec<ComboData> = combo_data.iter().map(|c| ComboData {
+                                index: c.index as i32,
+                                key1: SharedString::from(format!("R{}C{}", c.r1, c.c1)),
+                                key2: SharedString::from(format!("R{}C{}", c.r2, c.c2)),
+                                result: SharedString::from(keycode::decode_keycode(c.result)),
+                            }).collect();
+                            window.global::<AdvancedBridge>().set_combos(
+                                ModelRc::from(Rc::new(VecModel::from(model)))
+                            );
+                        }
+                        BgMsg::LeaderList(leader_data) => {
+                            let model: Vec<LeaderData> = leader_data.iter().map(|l| {
+                                let seq: Vec<String> = l.sequence.iter()
+                                    .map(|&k| keycode::hid_key_name(k))
+                                    .collect();
+                                LeaderData {
+                                    index: l.index as i32,
+                                    sequence: SharedString::from(seq.join(" → ")),
+                                    result: SharedString::from(keycode::hid_key_name(l.result)),
                                 }
-                                "combo" => {
-                                    let combo_data = logic::parsers::parse_combo_lines(&lines);
-                                    let model: Vec<ComboData> = combo_data.iter().map(|c| ComboData {
-                                        index: c.index as i32,
-                                        key1: SharedString::from(format!("R{}C{}", c.r1, c.c1)),
-                                        key2: SharedString::from(format!("R{}C{}", c.r2, c.c2)),
-                                        result: SharedString::from(keycode::decode_keycode(c.result)),
-                                    }).collect();
-                                    window.global::<AdvancedBridge>().set_combos(
-                                        ModelRc::from(Rc::new(VecModel::from(model)))
-                                    );
+                            }).collect();
+                            window.global::<AdvancedBridge>().set_leaders(
+                                ModelRc::from(Rc::new(VecModel::from(model)))
+                            );
+                        }
+                        BgMsg::KoList(ko_data) => {
+                            let model: Vec<KeyOverrideData> = ko_data.iter().enumerate().map(|(i, ko)| {
+                                let trig_key = keycode::hid_key_name(ko[0]);
+                                let trig_mod = keycode::mod_name(ko[1]);
+                                let res_key = keycode::hid_key_name(ko[2]);
+                                let res_mod = keycode::mod_name(ko[3]);
+                                let trigger = if ko[1] != 0 {
+                                    format!("{}+{}", trig_mod, trig_key)
+                                } else {
+                                    trig_key
+                                };
+                                let result = if ko[3] != 0 {
+                                    format!("{}+{}", res_mod, res_key)
+                                } else {
+                                    res_key
+                                };
+                                KeyOverrideData {
+                                    index: i as i32,
+                                    trigger: SharedString::from(trigger),
+                                    result: SharedString::from(result),
                                 }
-                                "leader" => {
-                                    let leader_data = logic::parsers::parse_leader_lines(&lines);
-                                    let model: Vec<LeaderData> = leader_data.iter().map(|l| {
-                                        let seq: Vec<String> = l.sequence.iter()
-                                            .map(|&k| keycode::hid_key_name(k))
-                                            .collect();
-                                        LeaderData {
-                                            index: l.index as i32,
-                                            sequence: SharedString::from(seq.join(" → ")),
-                                            result: SharedString::from(keycode::hid_key_name(l.result)),
-                                        }
-                                    }).collect();
-                                    window.global::<AdvancedBridge>().set_leaders(
-                                        ModelRc::from(Rc::new(VecModel::from(model)))
-                                    );
-                                }
-                                "ko" => {
-                                    let ko_data = logic::parsers::parse_ko_lines(&lines);
-                                    let model: Vec<KeyOverrideData> = ko_data.iter().enumerate().map(|(i, ko)| {
-                                        let trig_key = keycode::hid_key_name(ko[0]);
-                                        let trig_mod = keycode::mod_name(ko[1]);
-                                        let res_key = keycode::hid_key_name(ko[2]);
-                                        let res_mod = keycode::mod_name(ko[3]);
-                                        let trigger = if ko[1] != 0 {
-                                            format!("{}+{}", trig_mod, trig_key)
-                                        } else {
-                                            trig_key
-                                        };
-                                        let result = if ko[3] != 0 {
-                                            format!("{}+{}", res_mod, res_key)
-                                        } else {
-                                            res_key
-                                        };
-                                        KeyOverrideData {
-                                            index: i as i32,
-                                            trigger: SharedString::from(trigger),
-                                            result: SharedString::from(result),
-                                        }
-                                    }).collect();
-                                    window.global::<AdvancedBridge>().set_key_overrides(
-                                        ModelRc::from(Rc::new(VecModel::from(model)))
-                                    );
-                                }
-                                "bt" => {
-                                    let bt_text = lines.join("\n");
-                                    window.global::<AdvancedBridge>().set_bt_status(SharedString::from(bt_text));
-                                }
-                                "macros" => {
-                                    let macro_data = logic::parsers::parse_macro_lines(&lines);
-                                    let model: Vec<MacroData> = macro_data.iter().map(|m| {
-                                        let steps_str: Vec<String> = m.steps.iter().map(|s| {
-                                            if s.is_delay() {
-                                                format!("T({})", s.delay_ms())
-                                            } else {
-                                                format!("D({:02X})", s.keycode)
-                                            }
-                                        }).collect();
-                                        MacroData {
-                                            slot: m.slot as i32,
-                                            name: SharedString::from(&m.name),
-                                            steps: SharedString::from(steps_str.join(" ")),
-                                        }
-                                    }).collect();
-                                    window.global::<MacroBridge>().set_macros(
-                                        ModelRc::from(Rc::new(VecModel::from(model)))
-                                    );
-                                }
-                                "wpm" => {
-                                    if let Some(line) = lines.first() {
-                                        let wpm: u16 = line.split_whitespace()
-                                            .last()
-                                            .and_then(|s| s.parse().ok())
-                                            .unwrap_or(0);
-                                        window.global::<AppState>().set_wpm(wpm as i32);
-                                    }
-                                }
-                                "tama" => {
-                                    let text = lines.join("\n");
-                                    window.global::<AdvancedBridge>().set_tama_status(SharedString::from(text));
-                                }
-                                "autoshift" => {
-                                    let text = lines.join(" ");
-                                    window.global::<AdvancedBridge>().set_autoshift_status(SharedString::from(text));
-                                }
-                                _ => {}
-                            }
+                            }).collect();
+                            window.global::<AdvancedBridge>().set_key_overrides(
+                                ModelRc::from(Rc::new(VecModel::from(model)))
+                            );
+                        }
+                        BgMsg::BtStatus(lines) => {
+                            let bt_text = lines.join("\n");
+                            window.global::<AdvancedBridge>().set_bt_status(SharedString::from(bt_text));
+                        }
+                        BgMsg::TamaStatus(lines) => {
+                            let text = lines.join("\n");
+                            window.global::<AdvancedBridge>().set_tama_status(SharedString::from(text));
+                        }
+                        BgMsg::AutoshiftStatus(text) => {
+                            window.global::<AdvancedBridge>().set_autoshift_status(SharedString::from(text));
+                        }
+                        BgMsg::Wpm(wpm) => {
+                            window.global::<AppState>().set_wpm(wpm as i32);
                         }
                         BgMsg::OtaProgress(progress, msg) => {
                             let s = window.global::<SettingsBridge>();
@@ -1900,6 +2343,25 @@ fn main() {
                                 }
                                 Err(e) => {
                                     s.set_ota_status(SharedString::from(format!("OTA error: {}", e)));
+                                }
+                            }
+                        }
+                        BgMsg::ConfigProgress(progress, msg) => {
+                            let s = window.global::<SettingsBridge>();
+                            s.set_config_progress(progress);
+                            s.set_config_status(SharedString::from(msg));
+                        }
+                        BgMsg::ConfigDone(result) => {
+                            let s = window.global::<SettingsBridge>();
+                            s.set_config_busy(false);
+                            match result {
+                                Ok(msg) => {
+                                    s.set_config_progress(1.0);
+                                    s.set_config_status(SharedString::from(msg));
+                                }
+                                Err(e) => {
+                                    s.set_config_progress(0.0);
+                                    s.set_config_status(SharedString::from(format!("Error: {}", e)));
                                 }
                             }
                         }
@@ -1941,17 +2403,41 @@ fn main() {
                     let tx = tx.clone();
                     std::thread::spawn(move || {
                         let Ok(mut ser) = serial.try_lock() else { return };
-                        let lines = ser.query_command("WPM?").unwrap_or_default();
-                        drop(ser);
-                        let _ = tx.send(BgMsg::TextLines("wpm".into(), lines));
+                        if let Ok(r) = ser.send_binary(logic::binary_protocol::cmd::WPM_QUERY, &[]) {
+                            let wpm = if r.payload.len() >= 2 {
+                                u16::from_le_bytes([r.payload[0], r.payload[1]])
+                            } else { 0 };
+                            let _ = tx.send(BgMsg::Wpm(wpm));
+                        }
                     });
                 },
             );
         }
 
         // Keep timers alive
+        // Layout auto-refresh timer (5s)
+        let layout_timer = slint::Timer::default();
+        {
+            let window_weak3 = window.as_weak();
+            layout_timer.start(
+                slint::TimerMode::Repeated,
+                std::time::Duration::from_secs(5),
+                move || {
+                    let Some(w) = window_weak3.upgrade() else { return };
+                    let lb = w.global::<LayoutBridge>();
+                    if !lb.get_auto_refresh() { return; }
+                    let path = lb.get_file_path().to_string();
+                    if path.is_empty() { return; }
+                    if let Ok(json) = std::fs::read_to_string(&path) {
+                        populate_layout_preview(&w, &json);
+                    }
+                },
+            );
+        }
+
         let _keep_timer = timer;
         let _keep_wpm = wpm_timer;
+        let _keep_layout = layout_timer;
         window.run().unwrap();
     }
 }

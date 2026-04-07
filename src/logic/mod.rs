@@ -1,5 +1,6 @@
 #[allow(dead_code)]
 pub mod binary_protocol;
+pub mod config_io;
 #[allow(dead_code)]
 pub mod flasher;
 #[allow(dead_code)]
