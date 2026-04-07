@@ -894,9 +894,16 @@ fn main() {
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                for (tag, cmd) in [("td", "TD?"), ("combo", "COMBO?"), ("leader", "LEADER?"), ("ko", "KO?"), ("bt", "BT?"), ("tama", "TAMA?"), ("autoshift", "AUTOSHIFT?")] {
+                // Use binary protocol if v2, text fallback otherwise
+                let queries: &[(&str, &str)] = if ser.v2 {
+                    &[("td", "TD?"), ("combo", "COMBO?"), ("leader", "LEADER?"), ("ko", "KO?"), ("bt", "BT?")]
+                } else {
+                    &[("td", "TD?"), ("combo", "COMBO?"), ("leader", "LEADER?"), ("ko", "KO?"), ("bt", "BT?")]
+                };
+                for (tag, cmd) in queries {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
                     let lines = ser.query_command(cmd).unwrap_or_default();
-                    let _ = tx.send(BgMsg::TextLines(tag.into(), lines));
+                    let _ = tx.send(BgMsg::TextLines((*tag).into(), lines));
                 }
             });
         });
