@@ -6,15 +6,18 @@ export component KeyButton inherits Rectangle {
     in property <float> scale: 1.0;
     callback clicked(int);
 
-    // Heat color: dark purple (cold) -> orange -> bright red (hot)
+    // Heat color: stepped gradient for clarity
     property <color> heat-color:
-        data.heat < 0.5
-            ? #2d1b69.mix(#e67e22, data.heat * 2)
-            : #e67e22.mix(#e74c3c, (data.heat - 0.5) * 2);
+        data.heat > 0.8 ? #ff0000    // bright red
+        : data.heat > 0.6 ? #ff4400  // red-orange
+        : data.heat > 0.4 ? #ff8800  // orange
+        : data.heat > 0.2 ? #ffcc00  // yellow
+        : data.heat > 0.05 ? #446688 // cool blue
+        : #2d2d44;                    // very cold
 
     property <bool> is-heatmap: KeymapBridge.heatmap-enabled && data.heat > 0;
     property <color> base-color: root.is-heatmap ? root.heat-color : data.color;
-    property <color> text-color: root.is-heatmap && data.heat > 0.3 ? #1a1a2e : Theme.fg-primary;
+    property <color> text-color: root.is-heatmap && data.heat > 0.2 ? #1a1a2e : Theme.fg-primary;
 
     width: data.w;
     height: data.h;

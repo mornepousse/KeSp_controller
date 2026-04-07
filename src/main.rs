@@ -1290,7 +1290,7 @@ fn main() {
             let steps_text = steps_str.join(",");
             drop(steps);
             let cmd = logic::protocol::cmd_macroseq(slot_num, &name, &steps_text);
-            eprintln!("MACRO SAVE: {}", cmd);
+
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
@@ -1687,7 +1687,6 @@ fn main() {
                                     window.global::<AdvancedBridge>().set_bt_status(SharedString::from(bt_text));
                                 }
                                 "macros" => {
-                                    eprintln!("MACRO raw lines: {:?}", lines);
                                     let macro_data = logic::parsers::parse_macro_lines(&lines);
                                     let model: Vec<MacroData> = macro_data.iter().map(|m| {
                                         let steps_str: Vec<String> = m.steps.iter().map(|s| {
