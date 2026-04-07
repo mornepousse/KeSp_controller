@@ -22,7 +22,7 @@ pub fn decode_keycode(raw: u16) -> String {
 
     // --- MACRO: 0x1500..=0x2800, low byte == 0 ---
     if raw >= 0x1500 && raw <= 0x2800 && (raw & 0xFF) == 0 {
-        let idx = (raw >> 8) - 0x14;
+        let idx = (raw >> 8) - 0x15;
         return format!("M{idx}");
     }
 
