@@ -481,6 +481,7 @@ fn main() {
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = ser.send_command(&cmd);
+                std::thread::sleep(std::time::Duration::from_millis(100));
                 if let Ok(names) = ser.get_layer_names() {
                     let _ = tx.send(BgMsg::LayerNames(names));
                 }
@@ -1627,8 +1628,15 @@ fn main() {
                             window.global::<AppState>().set_status_text("Keymap loaded".into());
                         }
                         BgMsg::LayerNames(names) => {
-                            let new_layers = build_layer_model(&names);
-                            window.global::<KeymapBridge>().set_layers(ModelRc::from(new_layers));
+                            let active = window.global::<KeymapBridge>().get_active_layer() as usize;
+                            let layers: Vec<LayerInfo> = names.iter().enumerate().map(|(i, name)| LayerInfo {
+                                index: i as i32,
+                                name: SharedString::from(name.as_str()),
+                                active: i == active,
+                            }).collect();
+                            window.global::<KeymapBridge>().set_layers(
+                                ModelRc::from(Rc::new(VecModel::from(layers)))
+                            );
                         }
                         BgMsg::Disconnected => {
                             let app = window.global::<AppState>();
