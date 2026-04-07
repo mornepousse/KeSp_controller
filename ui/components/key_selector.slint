@@ -132,9 +132,8 @@ export component KeySelector inherits Rectangle {
                     scale: parent.kb-scale;
                     data: keycap;
                     clicked(key-index) => {
-                        KeymapBridge.select-key(key-index);
-                        // The dispatch in main.rs handles combo-key1/combo-key2
-                        KeySelectorBridge.select-keycode(0); // trigger dispatch
+                        // Pass key index as the code — dispatch reads keys_arc[code] for row/col
+                        KeySelectorBridge.select-keycode(key-index);
                         KeymapBridge.key-selector-open = false;
                     }
                 }

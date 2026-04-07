@@ -94,28 +94,22 @@ export component TabAdvanced inherits Rectangle {
                         for td in AdvancedBridge.tap-dances : Rectangle {
                             background: Theme.bg-primary;
                             border-radius: 4px;
-                            height: 30px;
+
                             HorizontalLayout {
-                                padding-left: 8px; padding-right: 8px; spacing: 4px;
+                                padding: 4px;
+                                padding-left: 8px;
+                                spacing: 4px;
+                                alignment: start;
+
                                 Text { text: "TD" + td.index; color: Theme.accent-purple; font-size: 11px; vertical-alignment: center; width: 35px; }
-                                for action[a-idx] in td.actions : Rectangle {
-                                    width: 60px;
-                                    height: 24px;
-                                    border-radius: 3px;
-                                    background: td-action-ta.has-hover ? Theme.button-hover : Theme.button-bg;
-                                    border-width: 1px;
-                                    border-color: Theme.button-border;
 
-                                    Text { text: action.name; color: Theme.fg-primary; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; }
-
-                                    td-action-ta := TouchArea {
-                                        clicked => {
-                                            AdvancedBridge.editing-td-index = td.index;
-                                            AdvancedBridge.editing-td-slot = a-idx;
-                                            KeymapBridge.selector-target = "td-action";
-                                            KeymapBridge.key-selector-open = true;
-                                        }
-                                        mouse-cursor: pointer;
+                                for action[a-idx] in td.actions : DarkButton {
+                                    text: action.name;
+                                    clicked => {
+                                        AdvancedBridge.editing-td-index = td.index;
+                                        AdvancedBridge.editing-td-slot = a-idx;
+                                        KeymapBridge.selector-target = "td-action";
+                                        KeymapBridge.key-selector-open = true;
                                     }
                                 }
                             }

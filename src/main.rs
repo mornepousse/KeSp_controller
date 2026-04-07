@@ -705,25 +705,21 @@ fn main() {
                     adv.set_new_leader_result_name(name);
                 }
                 "combo-key1" | "combo-key2" => {
-                    // For combo key picking, the user clicked on the keyboard view.
-                    // The selected key index tells us which physical key was clicked.
-                    let key_idx = w.global::<KeymapBridge>().get_selected_key_index();
-                    if key_idx >= 0 {
-                        let keys = keys_arc.borrow();
-                        let idx = key_idx as usize;
-                        if idx < keys.len() {
-                            let kp = &keys[idx];
-                            let adv = w.global::<AdvancedBridge>();
-                            let label = SharedString::from(format!("R{}C{}", kp.row, kp.col));
-                            if target.as_str() == "combo-key1" {
-                                adv.set_new_combo_r1(kp.row as i32);
-                                adv.set_new_combo_c1(kp.col as i32);
-                                adv.set_new_combo_key1_name(label);
-                            } else {
-                                adv.set_new_combo_r2(kp.row as i32);
-                                adv.set_new_combo_c2(kp.col as i32);
-                                adv.set_new_combo_key2_name(label);
-                            }
+                    // code = key index from the mini keyboard in the popup
+                    let keys = keys_arc.borrow();
+                    let idx = code as usize;
+                    if idx < keys.len() {
+                        let kp = &keys[idx];
+                        let adv = w.global::<AdvancedBridge>();
+                        let label = SharedString::from(format!("R{}C{}", kp.row, kp.col));
+                        if target.as_str() == "combo-key1" {
+                            adv.set_new_combo_r1(kp.row as i32);
+                            adv.set_new_combo_c1(kp.col as i32);
+                            adv.set_new_combo_key1_name(label);
+                        } else {
+                            adv.set_new_combo_r2(kp.row as i32);
+                            adv.set_new_combo_c2(kp.col as i32);
+                            adv.set_new_combo_key2_name(label);
                         }
                     }
                 }
