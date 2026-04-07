@@ -1083,13 +1083,18 @@ fn main() {
         let tx = bg_tx.clone();
         let window_weak = window.as_weak();
 
-        window.global::<AdvancedBridge>().on_create_ko(move |trig_code, trig_mod_idx, result_code, res_mod_idx| {
+        window.global::<AdvancedBridge>().on_create_ko(move || {
             let Some(w) = window_weak.upgrade() else { return };
-            let trig = trig_code as u8;
-            let trig_mod = mod_idx_to_byte(trig_mod_idx);
-            let result = result_code as u8;
-            let res_mod = mod_idx_to_byte(res_mod_idx);
-            let next_idx = w.global::<AdvancedBridge>().get_key_overrides().row_count() as u8;
+            let adv = w.global::<AdvancedBridge>();
+            let trig = adv.get_new_ko_trigger_code() as u8;
+            let trig_mod = (adv.get_new_ko_trig_ctrl() as u8)
+                | ((adv.get_new_ko_trig_shift() as u8) << 1)
+                | ((adv.get_new_ko_trig_alt() as u8) << 2);
+            let result = adv.get_new_ko_result_code() as u8;
+            let res_mod = (adv.get_new_ko_res_ctrl() as u8)
+                | ((adv.get_new_ko_res_shift() as u8) << 1)
+                | ((adv.get_new_ko_res_alt() as u8) << 2);
+            let next_idx = adv.get_key_overrides().row_count() as u8;
             let cmd = logic::protocol::cmd_koset(next_idx, trig, trig_mod, result, res_mod);
             let serial = serial.clone();
             let tx = tx.clone();
@@ -1100,9 +1105,7 @@ fn main() {
                 let lines = ser.query_command("KO?").unwrap_or_default();
                 let _ = tx.send(BgMsg::TextLines("ko".into(), lines));
             });
-            if let Some(w) = window_weak.upgrade() {
-                w.global::<AppState>().set_status_text("Creating key override...".into());
-            }
+            w.global::<AppState>().set_status_text("Creating key override...".into());
         });
     }
 

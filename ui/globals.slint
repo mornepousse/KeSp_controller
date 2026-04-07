@@ -171,10 +171,14 @@ export global AdvancedBridge {
     // KO creation: keycodes for trigger and result
     in-out property <int> new-ko-trigger-code: 0;
     in-out property <string> new-ko-trigger-name: "Pick...";
-    in-out property <int> new-ko-trig-mod-idx: 0; // 0=None,1=Ctrl,2=Shift,...
+    in-out property <bool> new-ko-trig-ctrl: false;
+    in-out property <bool> new-ko-trig-shift: false;
+    in-out property <bool> new-ko-trig-alt: false;
     in-out property <int> new-ko-result-code: 0;
     in-out property <string> new-ko-result-name: "Pick...";
-    in-out property <int> new-ko-res-mod-idx: 0;
+    in-out property <bool> new-ko-res-ctrl: false;
+    in-out property <bool> new-ko-res-shift: false;
+    in-out property <bool> new-ko-res-alt: false;
     // Leader creation
     in-out property <int> new-leader-seq0-code: 0;
     in-out property <string> new-leader-seq0-name: "";
@@ -200,7 +204,7 @@ export global AdvancedBridge {
     callback set-trilayer(int, int, int);
     callback bt-switch(int);
     callback create-combo(); // reads r1,c1,r2,c2,result from properties
-    callback create-ko(int, int, int, int); // trigger_code, trig_mod_idx, result_code, res_mod_idx
+    callback create-ko(); // reads all fields from properties
     callback create-leader(int, int); // result_code, result_mod_idx (sequence comes from seq0-3 properties)
     // TAMA
     in property <string> tama-status: "";

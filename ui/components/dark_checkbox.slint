@@ -1,0 +1,45 @@
+import { Theme } from "../theme.slint";
+
+export component DarkCheckbox inherits Rectangle {
+    in property <string> text;
+    in-out property <bool> checked: false;
+
+    height: 24px;
+    min-width: box.width + label.preferred-width + 10px;
+
+    HorizontalLayout {
+        spacing: 4px;
+        alignment: start;
+
+        box := Rectangle {
+            width: 16px;
+            height: 16px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 3px;
+            border-width: 1px;
+            border-color: root.checked ? Theme.accent-purple : Theme.button-border;
+            background: root.checked ? Theme.accent-purple : Theme.button-bg;
+
+            Text {
+                text: root.checked ? "v" : "";
+                color: #282a36;
+                font-size: 11px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        label := Text {
+            text: root.text;
+            color: Theme.fg-primary;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+
+    TouchArea {
+        clicked => { root.checked = !root.checked; }
+        mouse-cursor: pointer;
+    }
+}

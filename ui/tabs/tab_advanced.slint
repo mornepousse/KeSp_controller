@@ -2,6 +2,7 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
 import { DarkComboBox } from "../components/dark_combo_box.slint";
+import { DarkCheckbox } from "../components/dark_checkbox.slint";
 import { AdvancedBridge, AppState, ConnectionState, KeymapBridge } from "../globals.slint";
 
 component SectionHeader inherits Text {
@@ -141,25 +142,28 @@ export component TabAdvanced inherits Rectangle {
                                 padding: 10px;
                                 spacing: 8px;
                                 Text { text: "Add Key Override"; color: Theme.fg-secondary; font-size: 12px; font-weight: 600; }
+                                Text { text: "When you press [From] key, output [To] key instead"; color: Theme.fg-secondary; font-size: 10px; }
                                 HorizontalLayout {
                                     spacing: 8px;
                                     alignment: start;
-                                    Text { text: "Trigger:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    Text { text: "From:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
                                     PickButton { label: AdvancedBridge.new-ko-trigger-name; target: "ko-trigger"; }
-                                    Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
-                                    ModComboBox { current-index <=> AdvancedBridge.new-ko-trig-mod-idx; }
+                                    DarkCheckbox { text: "Ctrl"; checked <=> AdvancedBridge.new-ko-trig-ctrl; }
+                                    DarkCheckbox { text: "Shift"; checked <=> AdvancedBridge.new-ko-trig-shift; }
+                                    DarkCheckbox { text: "Alt"; checked <=> AdvancedBridge.new-ko-trig-alt; }
                                 }
                                 HorizontalLayout {
                                     spacing: 8px;
                                     alignment: start;
-                                    Text { text: "Result:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+                                    Text { text: "To:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
                                     PickButton { label: AdvancedBridge.new-ko-result-name; target: "ko-result"; }
-                                    Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
-                                    ModComboBox { current-index <=> AdvancedBridge.new-ko-res-mod-idx; }
+                                    DarkCheckbox { text: "Ctrl"; checked <=> AdvancedBridge.new-ko-res-ctrl; }
+                                    DarkCheckbox { text: "Shift"; checked <=> AdvancedBridge.new-ko-res-shift; }
+                                    DarkCheckbox { text: "Alt"; checked <=> AdvancedBridge.new-ko-res-alt; }
                                 }
                                 DarkButton {
                                     text: "Add Key Override";
-                                    clicked => { AdvancedBridge.create-ko(AdvancedBridge.new-ko-trigger-code, AdvancedBridge.new-ko-trig-mod-idx, AdvancedBridge.new-ko-result-code, AdvancedBridge.new-ko-res-mod-idx); }
+                                    clicked => { AdvancedBridge.create-ko(); }
                                 }
                             }
                         }
