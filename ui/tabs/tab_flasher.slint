@@ -1,4 +1,4 @@
-import { LineEdit } from "std-widgets.slint";
+import { DarkLineEdit } from "../components/dark_line_edit.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
 import { DarkComboBox } from "../components/dark_combo_box.slint";
@@ -53,7 +53,7 @@ export component TabFlasher inherits Rectangle {
                         }
                     }
 
-                    if FlasherBridge.prog-ports.length == 0 : LineEdit {
+                    if FlasherBridge.prog-ports.length == 0 : DarkLineEdit {
                         horizontal-stretch: 1;
                         text <=> FlasherBridge.selected-prog-port;
                         placeholder-text: "/dev/ttyUSB0";

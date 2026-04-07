@@ -1,4 +1,5 @@
-import { ScrollView, LineEdit } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
+import { DarkLineEdit } from "../components/dark_line_edit.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
 import { DarkComboBox } from "../components/dark_combo_box.slint";
@@ -45,7 +46,7 @@ export component TabMacros inherits Rectangle {
                         current-index <=> MacroBridge.new-slot-idx;
                     }
                     Text { text: "Name:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
-                    LineEdit {
+                    DarkLineEdit {
                         horizontal-stretch: 1;
                         text <=> MacroBridge.new-name;
                         placeholder-text: "macro name";

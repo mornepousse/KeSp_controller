@@ -1,4 +1,5 @@
-import { LineEdit, ScrollView } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
+import { DarkLineEdit } from "dark_line_edit.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "dark_button.slint";
 import { DarkComboBox } from "dark_combo_box.slint";
@@ -140,7 +141,7 @@ export component KeySelector inherits Rectangle {
             }
 
             // Normal mode: search + key grid
-            if !keyboard-mode : LineEdit {
+            if !keyboard-mode : DarkLineEdit {
                 placeholder-text: "Search...";
                 text <=> KeySelectorBridge.search-text;
                 edited(text) => { KeySelectorBridge.apply-filter(text); }
@@ -233,7 +234,7 @@ export component KeySelector inherits Rectangle {
                         spacing: 6px;
                         height: 32px;
                         Text { text: "0x"; color: Theme.accent-orange; font-size: 12px; font-weight: 600; vertical-alignment: center; }
-                        hex-edit := LineEdit {
+                        hex-edit := DarkLineEdit {
                             width: 80px;
                             text <=> KeySelectorBridge.hex-input;
                             placeholder-text: "5204";

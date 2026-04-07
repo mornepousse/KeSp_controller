@@ -1,0 +1,23 @@
+import { LineEdit } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+
+export component DarkLineEdit inherits Rectangle {
+    in property <string> placeholder-text: "";
+    in-out property <string> text: "";
+    callback accepted(string);
+    callback edited(string);
+
+    forward-focus: inner;
+    height: 28px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: inner.has-focus ? Theme.accent-purple : Theme.button-border;
+    background: Theme.button-bg;
+
+    inner := LineEdit {
+        text <=> root.text;
+        placeholder-text: root.placeholder-text;
+        accepted(t) => { root.accepted(t); }
+        edited(t) => { root.edited(t); }
+    }
+}
