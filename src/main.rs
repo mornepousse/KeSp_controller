@@ -672,6 +672,7 @@ fn main() {
     let dispatch_keycode = {
         let apply_keycode = apply_keycode.clone();
         let keys_arc = keys_arc.clone();
+        let serial = serial.clone();
         let macro_steps = macro_steps.clone();
         let refresh_macro_display = refresh_macro_display.clone();
         let window_weak = window.as_weak();
@@ -737,6 +738,41 @@ fn main() {
                         _ => {}
                     }
                     if count < 4 { adv.set_new_leader_seq_count(count + 1); }
+                }
+                "td-action" => {
+                    let adv = w.global::<AdvancedBridge>();
+                    let td_idx = adv.get_editing_td_index();
+                    let slot = adv.get_editing_td_slot() as usize;
+                    if td_idx >= 0 && slot < 4 {
+                        // Update model in place
+                        let tds = adv.get_tap_dances();
+                        for i in 0..tds.row_count() {
+                            let td = tds.row_data(i).unwrap();
+                            if td.index == td_idx {
+                                let actions = td.actions;
+                                let mut a = actions.row_data(slot).unwrap();
+                                a.name = name.clone();
+                                a.code = code as i32;
+                                actions.set_row_data(slot, a);
+
+                                // Collect all 4 action codes and send to firmware
+                                let mut codes = [0u16; 4];
+                                for j in 0..4.min(actions.row_count()) {
+                                    codes[j] = actions.row_data(j).unwrap().code as u16;
+                                }
+                                let payload = logic::binary_protocol::td_set_payload(td_idx as u8, &codes);
+                                let serial = serial.clone();
+                                std::thread::spawn(move || {
+                                    let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                                    let _ = ser.send_binary(logic::binary_protocol::cmd::TD_SET, &payload);
+                                });
+                                w.global::<AppState>().set_status_text(
+                                    SharedString::from(format!("TD{} slot {} = {}", td_idx, slot, name))
+                                );
+                                break;
+                            }
+                        }
+                    }
                 }
                 "macro-step" => {
                     // Add key press (Down + Up) to macro steps
@@ -1018,7 +1054,14 @@ fn main() {
             let r2 = adv.get_new_combo_r2() as u8;
             let c2 = adv.get_new_combo_c2() as u8;
             let result = adv.get_new_combo_result_code() as u8;
+            let key1_name = adv.get_new_combo_key1_name();
+            let key2_name = adv.get_new_combo_key2_name();
+            if key1_name == "Pick..." || key2_name == "Pick..." {
+                w.global::<AppState>().set_status_text("Pick both keys first".into());
+                return;
+            }
             let cmd = logic::protocol::cmd_comboset(255, r1, c1, r2, c2, result);
+            eprintln!("COMBOSET: {}", cmd);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
@@ -1481,7 +1524,10 @@ fn main() {
                                         .map(|(i, actions)| TapDanceData {
                                             index: i as i32,
                                             actions: ModelRc::from(Rc::new(VecModel::from(
-                                                actions.iter().map(|&a| SharedString::from(keycode::decode_keycode(a))).collect::<Vec<_>>()
+                                                actions.iter().map(|&a| TapDanceAction {
+                                                    name: SharedString::from(keycode::decode_keycode(a)),
+                                                    code: a as i32,
+                                                }).collect::<Vec<_>>()
                                             ))),
                                         })
                                         .collect();

@@ -121,9 +121,14 @@ export global StatsBridge {
 
 // ---- Advanced ----
 
+export struct TapDanceAction {
+    name: string,
+    code: int,
+}
+
 export struct TapDanceData {
     index: int,
-    actions: [string],
+    actions: [TapDanceAction],
 }
 
 export struct ComboData {
@@ -183,6 +188,11 @@ export global AdvancedBridge {
     in-out property <int> new-leader-result-code: 0;
     in-out property <string> new-leader-result-name: "Pick...";
     in-out property <int> new-leader-mod-idx: 0;
+    // TD editing: stores which TD slot+action is being edited
+    in-out property <int> editing-td-index: -1;
+    in-out property <int> editing-td-slot: -1;  // 0-3 = which action
+    callback save-td(int, int, int, int, int); // index, a1, a2, a3, a4 (keycodes)
+    callback edit-td-action(int, int); // td_index, action_slot -> opens popup
     callback refresh-advanced();
     callback delete-combo(int);
     callback delete-leader(int);
