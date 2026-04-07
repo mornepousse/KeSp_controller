@@ -20,7 +20,8 @@ enum BgMsg {
     TextLines(String, Vec<String>), // tag, lines
     HeatmapData(Vec<Vec<u32>>, u32), // counts, max
     BigramLines(Vec<String>),
-    LayoutJson(Vec<KeycapPos>),     // physical key positions from firmware
+    LayoutJson(Vec<KeycapPos>),
+    MacroList(Vec<logic::parsers::MacroEntry>),
     FlashProgress(f32, String),  // progress 0-1, status message
     FlashDone(Result<(), String>),
 }
@@ -1170,8 +1171,16 @@ fn main() {
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let lines = ser.query_command("MACROS?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("macros".into(), lines));
+                if ser.v2 {
+                    if let Ok(resp) = ser.send_binary(logic::binary_protocol::cmd::LIST_MACROS, &[]) {
+                        let macros = logic::parsers::parse_macros_binary(&resp.payload);
+                        let _ = tx.send(BgMsg::MacroList(macros));
+                    }
+                } else {
+                    let lines = ser.query_command("MACROS?").unwrap_or_default();
+                    let macros = logic::parsers::parse_macro_lines(&lines);
+                    let _ = tx.send(BgMsg::MacroList(macros));
+                }
             });
         });
     }
@@ -1236,8 +1245,11 @@ fn main() {
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = ser.send_command(&cmd);
-                let lines = ser.query_command("MACROS?").unwrap_or_default();
-                let _ = tx.send(BgMsg::TextLines("macros".into(), lines));
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if let Ok(resp) = ser.send_binary(logic::binary_protocol::cmd::LIST_MACROS, &[]) {
+                    let macros = logic::parsers::parse_macros_binary(&resp.payload);
+                    let _ = tx.send(BgMsg::MacroList(macros));
+                }
             });
             w.global::<AppState>().set_status_text(
                 SharedString::from(format!("Saving macro #{}...", slot_num))
@@ -1663,6 +1675,22 @@ fn main() {
                                 }
                                 _ => {}
                             }
+                        }
+                        BgMsg::MacroList(macros) => {
+                            let model: Vec<MacroData> = macros.iter().map(|m| {
+                                let steps_str: Vec<String> = m.steps.iter().map(|s| {
+                                    if s.is_delay() { format!("T({})", s.delay_ms()) }
+                                    else { format!("{}", keycode::hid_key_name(s.keycode)) }
+                                }).collect();
+                                MacroData {
+                                    slot: m.slot as i32,
+                                    name: SharedString::from(&m.name),
+                                    steps: SharedString::from(steps_str.join(" ")),
+                                }
+                            }).collect();
+                            window.global::<MacroBridge>().set_macros(
+                                ModelRc::from(Rc::new(VecModel::from(model)))
+                            );
                         }
                     }
                 }
