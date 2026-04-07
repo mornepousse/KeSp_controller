@@ -1376,27 +1376,21 @@ fn main() {
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
+                use std::io::{Read, Write, BufRead, BufReader};
+
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
                 let total = firmware.len();
                 let chunk_size = 4096usize;
 
-                // Step 1: Send OTA command
+                // Step 1: Send OTA <size> command
                 let cmd = format!("OTA {}", total);
                 if let Err(e) = ser.send_command(&cmd) {
                     let _ = tx.send(BgMsg::OtaDone(Err(format!("Send OTA cmd failed: {}", e))));
                     return;
                 }
 
-                // Step 2: Wait for OTA_READY
+                // Step 2: Wait for OTA_READY (read lines with timeout)
                 let _ = tx.send(BgMsg::OtaProgress(0.0, "Waiting for OTA_READY...".into()));
-                let ready = ser.query_command("").unwrap_or_default();
-                let got_ready = ready.iter().any(|l| l.contains("OTA_READY"));
-                if !got_ready {
-                    // Try reading more
-                    std::thread::sleep(std::time::Duration::from_secs(2));
-                }
-
-                // Step 3: Send chunks
                 let port = match ser.port_mut() {
                     Some(p) => p,
                     None => {
@@ -1405,28 +1399,77 @@ fn main() {
                     }
                 };
 
-                use std::io::Write;
+                // Read until we get OTA_READY or timeout
+                let old_timeout = port.timeout();
+                let _ = port.set_timeout(std::time::Duration::from_secs(5));
+                let mut got_ready = false;
+                let port_clone = port.try_clone().unwrap();
+                let mut reader = BufReader::new(port_clone);
+                for _ in 0..20 {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).is_ok() {
+                        if line.contains("OTA_READY") {
+                            got_ready = true;
+                            break;
+                        }
+                    }
+                }
+                drop(reader);
+
+                if !got_ready {
+                    let _ = port.set_timeout(old_timeout);
+                    let _ = tx.send(BgMsg::OtaDone(Err("Firmware did not respond OTA_READY".into())));
+                    return;
+                }
+
+                // Step 3: Send chunks and wait for ACK after each
                 let num_chunks = (total + chunk_size - 1) / chunk_size;
+                let _ = port.set_timeout(std::time::Duration::from_secs(5));
+
                 for (i, chunk) in firmware.chunks(chunk_size).enumerate() {
+                    // Send chunk
                     if let Err(e) = port.write_all(chunk) {
+                        let _ = port.set_timeout(old_timeout);
                         let _ = tx.send(BgMsg::OtaDone(Err(format!("Write chunk {} failed: {}", i, e))));
                         return;
                     }
                     let _ = port.flush();
 
                     let progress = (i + 1) as f32 / num_chunks as f32;
-                    let msg = format!("Chunk {}/{} ({} KB / {} KB)",
+                    let _ = tx.send(BgMsg::OtaProgress(progress * 0.95, format!(
+                        "Chunk {}/{} ({} KB / {} KB)",
                         i + 1, num_chunks,
                         ((i + 1) * chunk_size).min(total) / 1024,
-                        total / 1024);
-                    let _ = tx.send(BgMsg::OtaProgress(progress * 0.95, msg));
+                        total / 1024
+                    )));
 
-                    // Wait for ACK (read with timeout)
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                    let mut buf = [0u8; 256];
-                    let _ = port.read(&mut buf);
+                    // Wait for ACK line
+                    let mut ack_buf = [0u8; 256];
+                    let mut ack = String::new();
+                    let start = std::time::Instant::now();
+                    while start.elapsed() < std::time::Duration::from_secs(5) {
+                        match port.read(&mut ack_buf) {
+                            Ok(n) if n > 0 => {
+                                ack.push_str(&String::from_utf8_lossy(&ack_buf[..n]));
+                                if ack.contains("OTA_OK") || ack.contains("OTA_DONE") || ack.contains("OTA_FAIL") {
+                                    break;
+                                }
+                            }
+                            _ => std::thread::sleep(std::time::Duration::from_millis(10)),
+                        }
+                    }
+
+                    if ack.contains("OTA_FAIL") {
+                        let _ = port.set_timeout(old_timeout);
+                        let _ = tx.send(BgMsg::OtaDone(Err(format!("Firmware error: {}", ack.trim()))));
+                        return;
+                    }
+                    if ack.contains("OTA_DONE") {
+                        break; // Firmware signals all received
+                    }
                 }
 
+                let _ = port.set_timeout(old_timeout);
                 let _ = tx.send(BgMsg::OtaProgress(1.0, "OTA complete, rebooting...".into()));
                 let _ = tx.send(BgMsg::OtaDone(Ok(())));
             });
