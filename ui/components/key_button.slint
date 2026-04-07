@@ -6,14 +6,15 @@ export component KeyButton inherits Rectangle {
     in property <float> scale: 1.0;
     callback clicked(int);
 
-    // Heat color: interpolate blue(cold) -> yellow -> red(hot)
+    // Heat color: dark purple (cold) -> orange -> bright red (hot)
     property <color> heat-color:
         data.heat < 0.5
-            ? Colors.blue.mix(Colors.yellow, data.heat * 2)
-            : Colors.yellow.mix(Colors.red, (data.heat - 0.5) * 2);
+            ? #2d1b69.mix(#e67e22, data.heat * 2)
+            : #e67e22.mix(#e74c3c, (data.heat - 0.5) * 2);
 
-    property <color> base-color:
-        KeymapBridge.heatmap-enabled && data.heat > 0 ? root.heat-color : data.color;
+    property <bool> is-heatmap: KeymapBridge.heatmap-enabled && data.heat > 0;
+    property <color> base-color: root.is-heatmap ? root.heat-color : data.color;
+    property <color> text-color: root.is-heatmap && data.heat > 0.3 ? #1a1a2e : Theme.fg-primary;
 
     width: data.w;
     height: data.h;
@@ -34,8 +35,9 @@ export component KeyButton inherits Rectangle {
 
         Text {
             text: data.label;
-            color: Theme.fg-primary;
+            color: root.text-color;
             font-size: max(7px, 11px * root.scale);
+            font-weight: root.is-heatmap ? 700 : 400;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
@@ -43,7 +45,7 @@ export component KeyButton inherits Rectangle {
         if data.sublabel != "" : Text {
             y: parent.height - 14px * root.scale;
             text: data.sublabel;
-            color: Theme.fg-secondary;
+            color: root.is-heatmap ? root.text-color.with-alpha(0.7) : Theme.fg-secondary;
             font-size: max(5px, 8px * root.scale);
             horizontal-alignment: center;
             width: 100%;
