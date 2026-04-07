@@ -910,10 +910,10 @@ fn main() {
         window.global::<AdvancedBridge>().on_delete_combo(move |idx| {
             let serial = serial.clone();
             let tx = tx.clone();
-            let cmd = logic::protocol::cmd_combodel(idx as u8);
+            let payload = vec![idx as u8];
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::COMBO_DELETE, &payload);
                 let lines = ser.query_command("COMBO?").unwrap_or_default();
                 let _ = tx.send(BgMsg::TextLines("combo".into(), lines));
             });
@@ -928,10 +928,10 @@ fn main() {
         window.global::<AdvancedBridge>().on_delete_leader(move |idx| {
             let serial = serial.clone();
             let tx = tx.clone();
-            let cmd = logic::protocol::cmd_leaderdel(idx as u8);
+            let payload = vec![idx as u8];
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::LEADER_DELETE, &payload);
                 let lines = ser.query_command("LEADER?").unwrap_or_default();
                 let _ = tx.send(BgMsg::TextLines("leader".into(), lines));
             });
@@ -946,10 +946,10 @@ fn main() {
         window.global::<AdvancedBridge>().on_delete_ko(move |idx| {
             let serial = serial.clone();
             let tx = tx.clone();
-            let cmd = logic::protocol::cmd_kodel(idx as u8);
+            let payload = vec![idx as u8];
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::KO_DELETE, &payload);
                 let lines = ser.query_command("KO?").unwrap_or_default();
                 let _ = tx.send(BgMsg::TextLines("ko".into(), lines));
             });
@@ -1056,13 +1056,12 @@ fn main() {
                 w.global::<AppState>().set_status_text("Pick both keys first".into());
                 return;
             }
-            let cmd = logic::protocol::cmd_comboset(255, r1, c1, r2, c2, result);
-            eprintln!("COMBOSET: {}", cmd);
+            let payload = logic::binary_protocol::combo_set_payload(255, r1, c1, r2, c2, result);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::COMBO_SET, &payload);
                 let lines = ser.query_command("COMBO?").unwrap_or_default();
                 let _ = tx.send(BgMsg::TextLines("combo".into(), lines));
             });
@@ -1081,12 +1080,12 @@ fn main() {
             let trig_mod = mod_idx_to_byte(trig_mod_idx);
             let result = result_code as u8;
             let res_mod = mod_idx_to_byte(res_mod_idx);
-            let cmd = logic::protocol::cmd_koset(255, trig, trig_mod, result, res_mod);
+            let payload = logic::binary_protocol::ko_set_payload(255, trig, trig_mod, result, res_mod);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::KO_SET, &payload);
                 let lines = ser.query_command("KO?").unwrap_or_default();
                 let _ = tx.send(BgMsg::TextLines("ko".into(), lines));
             });
@@ -1113,12 +1112,12 @@ fn main() {
             if count > 3 { sequence.push(adv.get_new_leader_seq3_code() as u8); }
             let result = result_code as u8;
             let result_mod = mod_idx_to_byte(mod_idx);
-            let cmd = logic::protocol::cmd_leaderset(255, &sequence, result, result_mod);
+            let payload = logic::binary_protocol::leader_set_payload(255, &sequence, result, result_mod);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = ser.send_command(&cmd);
+                let _ = ser.send_binary(logic::binary_protocol::cmd::LEADER_SET, &payload);
                 let lines = ser.query_command("LEADER?").unwrap_or_default();
                 let _ = tx.send(BgMsg::TextLines("leader".into(), lines));
             });
