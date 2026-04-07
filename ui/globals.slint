@@ -62,7 +62,8 @@ export global KeymapBridge {
     in-out property <string> selector-target: "keymap";
     callback select-key(int);
     callback switch-layer(int);
-    callback change-key(int, int); // key-index, new-keycode
+    callback change-key(int, int);
+    callback toggle-heatmap();
     callback rename-layer(int, string); // layer-index, new-name
 }
 

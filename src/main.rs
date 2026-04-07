@@ -489,6 +489,23 @@ fn main() {
         });
     }
 
+    // --- Heatmap toggle: auto-load data ---
+    {
+        let serial = serial.clone();
+        let tx = bg_tx.clone();
+
+        keymap_bridge.on_toggle_heatmap(move || {
+            let serial = serial.clone();
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                let lines = ser.query_command("KEYSTATS?").unwrap_or_default();
+                let (data, max) = logic::parsers::parse_heatmap_lines(&lines);
+                let _ = tx.send(BgMsg::HeatmapData(data, max));
+            });
+        });
+    }
+
     // --- Connect/Disconnect callbacks ---
     {
         let serial_c = serial.clone();
@@ -1203,7 +1220,7 @@ fn main() {
         window.global::<MacroBridge>().on_save_macro(move || {
             let Some(w) = window_weak.upgrade() else { return };
             let mb = w.global::<MacroBridge>();
-            let slot_num = mb.get_new_slot_idx() as u8;
+            let slot_num = mb.get_macros().row_count() as u8;
             let name = mb.get_new_name().to_string();
             let steps = macro_steps.borrow();
             let steps_str: Vec<String> = steps.iter().map(|&(kc, md)| {
@@ -1213,6 +1230,7 @@ fn main() {
             let steps_text = steps_str.join(",");
             drop(steps);
             let cmd = logic::protocol::cmd_macroseq(slot_num, &name, &steps_text);
+            eprintln!("MACRO SAVE: {}", cmd);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
@@ -1606,6 +1624,7 @@ fn main() {
                                     window.global::<AdvancedBridge>().set_bt_status(SharedString::from(bt_text));
                                 }
                                 "macros" => {
+                                    eprintln!("MACRO raw lines: {:?}", lines);
                                     let macro_data = logic::parsers::parse_macro_lines(&lines);
                                     let model: Vec<MacroData> = macro_data.iter().map(|m| {
                                         let steps_str: Vec<String> = m.steps.iter().map(|s| {

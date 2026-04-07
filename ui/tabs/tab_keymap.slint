@@ -106,7 +106,10 @@ export component TabKeymap inherits VerticalLayout {
                 }
 
                 TouchArea {
-                    clicked => { KeymapBridge.heatmap-enabled = !KeymapBridge.heatmap-enabled; }
+                    clicked => {
+                                KeymapBridge.heatmap-enabled = !KeymapBridge.heatmap-enabled;
+                                if KeymapBridge.heatmap-enabled { KeymapBridge.toggle-heatmap(); }
+                            }
                     mouse-cursor: pointer;
                 }
             }
