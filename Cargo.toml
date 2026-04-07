@@ -2,6 +2,9 @@
 name = "KeSp_controller"
 version = "1.0.0"
 edition = "2021"
+license = "GPL-3.0"
+description = "Cross-platform configurator for the KeSp split ergonomic keyboard"
+repository = "https://github.com/mornepousse/KeSp_controller"
 
 [dependencies]
 slint = "1"
