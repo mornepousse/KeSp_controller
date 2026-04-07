@@ -58,6 +58,7 @@ export component TabKeymap inherits VerticalLayout {
             if root.renaming : VerticalLayout {
                 spacing: 4px;
                 rename-input := DarkLineEdit {
+                    max-width: 85px;
                     placeholder-text: "New name";
                     accepted(text) => {
                         KeymapBridge.rename-layer(KeymapBridge.active-layer, text);

@@ -453,6 +453,7 @@ fn main() {
                         layers.set_row_data(i, item);
                     }
                 }
+                w.global::<KeymapBridge>().set_active_layer(layer_index);
                 w.global::<AppState>().set_status_text(SharedString::from(format!("Loading layer {}...", idx)));
             }
             let serial = serial.clone();
