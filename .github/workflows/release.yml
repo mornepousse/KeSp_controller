@@ -16,9 +16,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: KeSp_controller-windows-x86_64.exe
-          - os: macos-13
-            target: x86_64-apple-darwin
-            name: KeSp_controller-macos-intel
           - os: macos-latest
             target: aarch64-apple-darwin
             name: KeSp_controller-macos-arm64
@@ -66,5 +63,4 @@ jobs:
           files: |
             KeSp_controller-linux-x86_64/KeSp_controller-linux-x86_64
             KeSp_controller-windows-x86_64.exe/KeSp_controller-windows-x86_64.exe
-            KeSp_controller-macos-intel/KeSp_controller-macos-intel
             KeSp_controller-macos-arm64/KeSp_controller-macos-arm64
