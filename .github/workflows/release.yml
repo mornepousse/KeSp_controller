@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: KeSp_controller-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: KeSp_controller-windows-x86_64.exe
+          - os: macos-13
+            target: x86_64-apple-darwin
+            name: KeSp_controller-macos-intel
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: KeSp_controller-macos-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          src="target/${{ matrix.target }}/release/KeSp_controller"
+          [ -f "${src}.exe" ] && src="${src}.exe"
+          cp "$src" "${{ matrix.name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            KeSp_controller-linux-x86_64/KeSp_controller-linux-x86_64
+            KeSp_controller-windows-x86_64.exe/KeSp_controller-windows-x86_64.exe
+            KeSp_controller-macos-intel/KeSp_controller-macos-intel
+            KeSp_controller-macos-arm64/KeSp_controller-macos-arm64
