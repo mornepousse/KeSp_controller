@@ -52,47 +52,46 @@ pub fn parse_td_lines(lines: &[String]) -> Vec<[u16; 4]> {
 }
 
 /// Parse KO (Key Override) lines into arrays of [trigger, mod, result, res_mod].
-/// Format: "KO0: trigger=2A mod=02 -> result=4C resmod=00"
+/// Format: "KO2: 0B+02->4C+00"
 pub fn parse_ko_lines(lines: &[String]) -> Vec<[u8; 4]> {
     let mut result = Vec::new();
 
     for line in lines {
-        // Only process lines starting with "KO"
-        let starts_with_ko = line.starts_with("KO");
-        if !starts_with_ko {
-            continue;
-        }
+        let trimmed = line.trim();
+        // Only process lines matching "KO<digit>:"
+        if !trimmed.starts_with("KO") { continue; }
+        let colon = match trimmed.find(':') {
+            Some(i) => i,
+            None => continue,
+        };
+        // Skip non-data lines like "KO 0 deleted", "KOSET 1:OK"
+        let index_str = &trimmed[2..colon];
+        if index_str.contains(' ') || index_str.parse::<u8>().is_err() { continue; }
 
-        // Helper: extract hex value after a keyword like "trigger="
-        let parse_hex = |key: &str| -> u8 {
-            let key_position = line.find(key);
-
-            let after_key = match key_position {
-                Some(i) => {
-                    let rest = &line[i + key.len()..];
-                    let first_token = rest.split_whitespace().next();
-                    first_token
-                }
-                None => None,
-            };
-
-            let parsed_value = match after_key {
-                Some(s) => {
-                    let without_prefix = s.trim_start_matches("0x");
-                    u8::from_str_radix(without_prefix, 16).ok()
-                }
-                None => None,
-            };
-
-            parsed_value.unwrap_or(0)
+        let after_colon = trimmed[colon + 1..].trim();
+        // Format: "0B+02->4C+00"
+        let arrow = match after_colon.find("->") {
+            Some(i) => i,
+            None => continue,
         };
 
-        let trigger = parse_hex("trigger=");
-        let modifier = parse_hex("mod=");
-        let result_key = parse_hex("result=");
-        let result_mod = parse_hex("resmod=");
+        let left = &after_colon[..arrow];   // "0B+02"
+        let right = &after_colon[arrow + 2..]; // "4C+00"
 
-        result.push([trigger, modifier, result_key, result_mod]);
+        let parse_pair = |s: &str| -> (u8, u8) {
+            let parts: Vec<&str> = s.split('+').collect();
+            if parts.len() == 2 {
+                let a = u8::from_str_radix(parts[0].trim(), 16).unwrap_or(0);
+                let b = u8::from_str_radix(parts[1].trim(), 16).unwrap_or(0);
+                (a, b)
+            } else {
+                (0, 0)
+            }
+        };
+
+        let (trigger, trig_mod) = parse_pair(left);
+        let (result_key, res_mod) = parse_pair(right);
+        result.push([trigger, trig_mod, result_key, res_mod]);
     }
 
     result
