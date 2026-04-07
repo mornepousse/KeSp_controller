@@ -67,12 +67,12 @@ export component MainWindow inherits Window {
                 padding-right: 8px;
                 spacing: 2px;
 
-                DarkTab { title: "Keymap"; active: root.current-tab == 0; clicked => { root.current-tab = 0; } }
-                DarkTab { title: "Advanced"; active: root.current-tab == 1; clicked => { root.current-tab = 1; } }
-                DarkTab { title: "Macros"; active: root.current-tab == 2; clicked => { root.current-tab = 2; } }
-                DarkTab { title: "Stats"; active: root.current-tab == 3; clicked => { root.current-tab = 3; } }
-                DarkTab { title: "Settings"; active: root.current-tab == 4; clicked => { root.current-tab = 4; } }
-                DarkTab { title: "Flash"; active: root.current-tab == 5; clicked => { root.current-tab = 5; } }
+                DarkTab { title: "Keymap"; active: root.current-tab == 0; clicked => { root.current-tab = 0; AppState.tab-changed(0); } }
+                DarkTab { title: "Advanced"; active: root.current-tab == 1; clicked => { root.current-tab = 1; AppState.tab-changed(1); } }
+                DarkTab { title: "Macros"; active: root.current-tab == 2; clicked => { root.current-tab = 2; AppState.tab-changed(2); } }
+                DarkTab { title: "Stats"; active: root.current-tab == 3; clicked => { root.current-tab = 3; AppState.tab-changed(3); } }
+                DarkTab { title: "Settings"; active: root.current-tab == 4; clicked => { root.current-tab = 4; AppState.tab-changed(4); } }
+                DarkTab { title: "Flash"; active: root.current-tab == 5; clicked => { root.current-tab = 5; AppState.tab-changed(5); } }
             }
         }
 

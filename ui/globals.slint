@@ -34,6 +34,7 @@ export enum ActiveTab { keymap, advanced, macros, stats, settings }
 export global AppState {
     in-out property <ConnectionState> connection: ConnectionState.disconnected;
     in-out property <ActiveTab> active-tab: ActiveTab.keymap;
+    callback tab-changed(int);
     in-out property <string> status-text: "Disconnected";
     in-out property <bool> spinner-visible: false;
     in-out property <string> firmware-version: "";

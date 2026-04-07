@@ -555,6 +555,57 @@ fn main() {
 
     window.global::<ConnectionBridge>().on_refresh_ports(|| {});
 
+    // --- Auto-refresh on tab change ---
+    {
+        let serial = serial.clone();
+        let tx = bg_tx.clone();
+        let window_weak = window.as_weak();
+
+        window.global::<AppState>().on_tab_changed(move |tab_idx| {
+            let Some(w) = window_weak.upgrade() else { return };
+            if w.global::<AppState>().get_connection() != ConnectionState::Connected { return; }
+
+            let serial = serial.clone();
+            let tx = tx.clone();
+            match tab_idx {
+                1 => {
+                    // Advanced: refresh TD, combo, leader, KO, BT
+                    std::thread::spawn(move || {
+                        let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                        for (tag, cmd) in [("td", "TD?"), ("combo", "COMBO?"), ("leader", "LEADER?"), ("ko", "KO?"), ("bt", "BT?")] {
+                            std::thread::sleep(std::time::Duration::from_millis(50));
+                            let lines = ser.query_command(cmd).unwrap_or_default();
+                            let _ = tx.send(BgMsg::TextLines(tag.into(), lines));
+                        }
+                    });
+                }
+                2 => {
+                    // Macros: refresh via binary
+                    std::thread::spawn(move || {
+                        let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Ok(resp) = ser.send_binary(logic::binary_protocol::cmd::LIST_MACROS, &[]) {
+                            let macros = logic::parsers::parse_macros_binary(&resp.payload);
+                            let _ = tx.send(BgMsg::MacroList(macros));
+                        }
+                    });
+                }
+                3 => {
+                    // Stats: refresh heatmap + bigrams
+                    std::thread::spawn(move || {
+                        let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                        let lines = ser.query_command("KEYSTATS?").unwrap_or_default();
+                        let (data, max) = logic::parsers::parse_heatmap_lines(&lines);
+                        let _ = tx.send(BgMsg::HeatmapData(data, max));
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        let bigram_lines = ser.query_command("BIGRAMS?").unwrap_or_default();
+                        let _ = tx.send(BgMsg::BigramLines(bigram_lines));
+                    });
+                }
+                _ => {}
+            }
+        });
+    }
+
     // --- Settings: change layout ---
     {
         let keyboard_layout = keyboard_layout.clone();
