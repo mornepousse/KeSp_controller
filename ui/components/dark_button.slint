@@ -6,20 +6,25 @@ export component DarkButton inherits Rectangle {
     in property <bool> primary: false;
     callback clicked();
 
-    min-width: btn-text.preferred-width + 20px;
+    min-width: btn-text.preferred-width + 24px;
     height: 28px;
     border-radius: 4px;
+    border-width: 1px;
+    border-color: !root.enabled ? transparent
+        : root.primary ? Theme.accent-purple.darker(0.1)
+        : Theme.button-border;
     background: !root.enabled ? Theme.bg-primary
         : root.primary && ta.has-hover ? Theme.accent-purple.darker(0.2)
         : root.primary ? Theme.accent-purple
         : ta.has-hover ? Theme.button-hover
         : Theme.button-bg;
-    opacity: root.enabled ? 1.0 : 0.5;
+    opacity: root.enabled ? 1.0 : 0.4;
 
     btn-text := Text {
         text: root.text;
-        color: root.enabled ? Theme.fg-primary : Theme.fg-secondary;
+        color: root.primary ? #282a36 : root.enabled ? Theme.fg-primary : Theme.fg-secondary;
         font-size: 12px;
+        font-weight: 500;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
