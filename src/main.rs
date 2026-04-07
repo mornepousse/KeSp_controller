@@ -1062,7 +1062,8 @@ fn main() {
                 w.global::<AppState>().set_status_text("Pick both keys first".into());
                 return;
             }
-            let cmd = logic::protocol::cmd_comboset(255, r1, c1, r2, c2, result);
+            let next_idx = adv.get_combos().row_count() as u8;
+            let cmd = logic::protocol::cmd_comboset(next_idx, r1, c1, r2, c2, result);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
@@ -1083,11 +1084,13 @@ fn main() {
         let window_weak = window.as_weak();
 
         window.global::<AdvancedBridge>().on_create_ko(move |trig_code, trig_mod_idx, result_code, res_mod_idx| {
+            let Some(w) = window_weak.upgrade() else { return };
             let trig = trig_code as u8;
             let trig_mod = mod_idx_to_byte(trig_mod_idx);
             let result = result_code as u8;
             let res_mod = mod_idx_to_byte(res_mod_idx);
-            let cmd = logic::protocol::cmd_koset(255, trig, trig_mod, result, res_mod);
+            let next_idx = w.global::<AdvancedBridge>().get_key_overrides().row_count() as u8;
+            let cmd = logic::protocol::cmd_koset(next_idx, trig, trig_mod, result, res_mod);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
@@ -1120,7 +1123,8 @@ fn main() {
             if count > 3 { sequence.push(adv.get_new_leader_seq3_code() as u8); }
             let result = result_code as u8;
             let result_mod = mod_idx_to_byte(mod_idx);
-            let cmd = logic::protocol::cmd_leaderset(255, &sequence, result, result_mod);
+            let next_idx = adv.get_leaders().row_count() as u8;
+            let cmd = logic::protocol::cmd_leaderset(next_idx, &sequence, result, result_mod);
             let serial = serial.clone();
             let tx = tx.clone();
             std::thread::spawn(move || {
