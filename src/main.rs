@@ -1577,10 +1577,24 @@ fn main() {
                                 "ko" => {
                                     let ko_data = logic::parsers::parse_ko_lines(&lines);
                                     let model: Vec<KeyOverrideData> = ko_data.iter().enumerate().map(|(i, ko)| {
+                                        let trig_key = keycode::hid_key_name(ko[0]);
+                                        let trig_mod = keycode::mod_name(ko[1]);
+                                        let res_key = keycode::hid_key_name(ko[2]);
+                                        let res_mod = keycode::mod_name(ko[3]);
+                                        let trigger = if ko[1] != 0 {
+                                            format!("{}+{}", trig_mod, trig_key)
+                                        } else {
+                                            trig_key
+                                        };
+                                        let result = if ko[3] != 0 {
+                                            format!("{}+{}", res_mod, res_key)
+                                        } else {
+                                            res_key
+                                        };
                                         KeyOverrideData {
                                             index: i as i32,
-                                            trigger: SharedString::from(keycode::hid_key_name(ko[0])),
-                                            result: SharedString::from(keycode::hid_key_name(ko[2])),
+                                            trigger: SharedString::from(trigger),
+                                            result: SharedString::from(result),
                                         }
                                     }).collect();
                                     window.global::<AdvancedBridge>().set_key_overrides(
