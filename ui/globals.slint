@@ -74,6 +74,13 @@ export global SettingsBridge {
     in property <[string]> available-layouts;
     in-out property <int> selected-layout-index: 0;
     callback change-layout(int);
+    // OTA
+    in-out property <string> ota-path: "";
+    in property <float> ota-progress: 0;
+    in property <string> ota-status: "";
+    in property <bool> ota-flashing: false;
+    callback ota-browse();
+    callback ota-start();
 }
 
 // ---- Stats ----

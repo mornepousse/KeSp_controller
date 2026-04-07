@@ -22,8 +22,10 @@ enum BgMsg {
     BigramLines(Vec<String>),
     LayoutJson(Vec<KeycapPos>),
     MacroList(Vec<logic::parsers::MacroEntry>),
-    FlashProgress(f32, String),  // progress 0-1, status message
+    FlashProgress(f32, String),
     FlashDone(Result<(), String>),
+    OtaProgress(f32, String),
+    OtaDone(Result<(), String>),
 }
 
 fn build_keycap_model(keys: &[KeycapPos]) -> Rc<VecModel<KeycapData>> {
@@ -1326,6 +1328,111 @@ fn main() {
         });
     }
 
+    // --- OTA: browse ---
+    {
+        let window_weak = window.as_weak();
+        window.global::<SettingsBridge>().on_ota_browse(move || {
+            let window_weak = window_weak.clone();
+            std::thread::spawn(move || {
+                let file = rfd::FileDialog::new()
+                    .add_filter("Firmware", &["bin"])
+                    .pick_file();
+                if let Some(path) = file {
+                    let path_str = path.to_string_lossy().to_string();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(w) = window_weak.upgrade() {
+                            w.global::<SettingsBridge>().set_ota_path(SharedString::from(path_str.as_str()));
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    // --- OTA: start ---
+    {
+        let serial = serial.clone();
+        let tx = bg_tx.clone();
+        let window_weak = window.as_weak();
+
+        window.global::<SettingsBridge>().on_ota_start(move || {
+            let Some(w) = window_weak.upgrade() else { return };
+            let settings = w.global::<SettingsBridge>();
+            let path = settings.get_ota_path().to_string();
+            if path.is_empty() { return; }
+
+            let firmware = match std::fs::read(&path) {
+                Ok(data) => data,
+                Err(e) => {
+                    let _ = tx.send(BgMsg::OtaDone(Err(format!("Cannot read {}: {}", path, e))));
+                    return;
+                }
+            };
+
+            settings.set_ota_flashing(true);
+            settings.set_ota_progress(0.0);
+            settings.set_ota_status(SharedString::from("Starting OTA..."));
+
+            let serial = serial.clone();
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                let total = firmware.len();
+                let chunk_size = 4096usize;
+
+                // Step 1: Send OTA command
+                let cmd = format!("OTA {}", total);
+                if let Err(e) = ser.send_command(&cmd) {
+                    let _ = tx.send(BgMsg::OtaDone(Err(format!("Send OTA cmd failed: {}", e))));
+                    return;
+                }
+
+                // Step 2: Wait for OTA_READY
+                let _ = tx.send(BgMsg::OtaProgress(0.0, "Waiting for OTA_READY...".into()));
+                let ready = ser.query_command("").unwrap_or_default();
+                let got_ready = ready.iter().any(|l| l.contains("OTA_READY"));
+                if !got_ready {
+                    // Try reading more
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+
+                // Step 3: Send chunks
+                let port = match ser.port_mut() {
+                    Some(p) => p,
+                    None => {
+                        let _ = tx.send(BgMsg::OtaDone(Err("Port not available".into())));
+                        return;
+                    }
+                };
+
+                use std::io::Write;
+                let num_chunks = (total + chunk_size - 1) / chunk_size;
+                for (i, chunk) in firmware.chunks(chunk_size).enumerate() {
+                    if let Err(e) = port.write_all(chunk) {
+                        let _ = tx.send(BgMsg::OtaDone(Err(format!("Write chunk {} failed: {}", i, e))));
+                        return;
+                    }
+                    let _ = port.flush();
+
+                    let progress = (i + 1) as f32 / num_chunks as f32;
+                    let msg = format!("Chunk {}/{} ({} KB / {} KB)",
+                        i + 1, num_chunks,
+                        ((i + 1) * chunk_size).min(total) / 1024,
+                        total / 1024);
+                    let _ = tx.send(BgMsg::OtaProgress(progress * 0.95, msg));
+
+                    // Wait for ACK (read with timeout)
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    let mut buf = [0u8; 256];
+                    let _ = port.read(&mut buf);
+                }
+
+                let _ = tx.send(BgMsg::OtaProgress(1.0, "OTA complete, rebooting...".into()));
+                let _ = tx.send(BgMsg::OtaDone(Ok(())));
+            });
+        });
+    }
+
     // --- Flasher: refresh prog ports ---
     {
         let window_weak = window.as_weak();
@@ -1724,6 +1831,24 @@ fn main() {
                                     window.global::<AdvancedBridge>().set_autoshift_status(SharedString::from(text));
                                 }
                                 _ => {}
+                            }
+                        }
+                        BgMsg::OtaProgress(progress, msg) => {
+                            let s = window.global::<SettingsBridge>();
+                            s.set_ota_progress(progress);
+                            s.set_ota_status(SharedString::from(msg));
+                        }
+                        BgMsg::OtaDone(result) => {
+                            let s = window.global::<SettingsBridge>();
+                            s.set_ota_flashing(false);
+                            match result {
+                                Ok(()) => {
+                                    s.set_ota_progress(1.0);
+                                    s.set_ota_status(SharedString::from("OTA complete!"));
+                                }
+                                Err(e) => {
+                                    s.set_ota_status(SharedString::from(format!("OTA error: {}", e)));
+                                }
                             }
                         }
                         BgMsg::MacroList(macros) => {

@@ -1,6 +1,7 @@
 import { Theme } from "../theme.slint";
+import { DarkButton } from "../components/dark_button.slint";
 import { DarkComboBox } from "../components/dark_combo_box.slint";
-import { SettingsBridge } from "../globals.slint";
+import { SettingsBridge, AppState, ConnectionState } from "../globals.slint";
 
 export component TabSettings inherits Rectangle {
     background: Theme.bg-primary;
@@ -17,29 +18,19 @@ export component TabSettings inherits Rectangle {
             font-weight: 700;
         }
 
-        // Keyboard layout section
+        // Keyboard layout
         Rectangle {
             background: Theme.bg-secondary;
             border-radius: 8px;
-            height: 80px;
 
             HorizontalLayout {
                 padding: 16px;
                 spacing: 12px;
-                alignment: start;
 
                 VerticalLayout {
                     alignment: center;
-                    Text {
-                        text: "Keyboard Layout";
-                        color: Theme.fg-primary;
-                        font-size: 14px;
-                    }
-                    Text {
-                        text: "Controls how keycodes are displayed (label remapping)";
-                        color: Theme.fg-secondary;
-                        font-size: 11px;
-                    }
+                    Text { text: "Keyboard Layout"; color: Theme.fg-primary; font-size: 14px; }
+                    Text { text: "Controls how keycodes are displayed"; color: Theme.fg-secondary; font-size: 11px; }
                 }
 
                 Rectangle { horizontal-stretch: 1; }
@@ -50,15 +41,88 @@ export component TabSettings inherits Rectangle {
                         width: 200px;
                         model: SettingsBridge.available-layouts;
                         current-index <=> SettingsBridge.selected-layout-index;
-                        selected(value) => {
-                            SettingsBridge.change-layout(self.current-index);
-                        }
+                        selected(value) => { SettingsBridge.change-layout(self.current-index); }
                     }
                 }
             }
         }
 
-        // About section
+        // OTA Firmware Update
+        Rectangle {
+            background: Theme.bg-secondary;
+            border-radius: 8px;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 10px;
+
+                Text { text: "OTA Firmware Update"; color: Theme.accent-cyan; font-size: 14px; font-weight: 600; }
+                Text { text: "Update firmware via USB (no programming cable needed)"; color: Theme.fg-secondary; font-size: 11px; }
+
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: SettingsBridge.ota-path != "" ? SettingsBridge.ota-path : "No firmware file selected";
+                        color: SettingsBridge.ota-path != "" ? Theme.fg-primary : Theme.fg-secondary;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+
+                    DarkButton {
+                        text: "Browse...";
+                        clicked => { SettingsBridge.ota-browse(); }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    DarkButton {
+                        text: SettingsBridge.ota-flashing ? "Flashing..." : "Flash OTA";
+                        primary: true;
+                        enabled: !SettingsBridge.ota-flashing
+                            && SettingsBridge.ota-path != ""
+                            && AppState.connection == ConnectionState.connected;
+                        clicked => { SettingsBridge.ota-start(); }
+                    }
+
+                    Text {
+                        text: SettingsBridge.ota-status;
+                        color: Theme.fg-primary;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                }
+
+                if SettingsBridge.ota-flashing || SettingsBridge.ota-progress > 0 : Rectangle {
+                    height: 20px;
+                    background: Theme.bg-primary;
+                    border-radius: 4px;
+
+                    Rectangle {
+                        x: 0;
+                        width: parent.width * clamp(SettingsBridge.ota-progress, 0, 1);
+                        height: 100%;
+                        background: SettingsBridge.ota-progress >= 1.0 ? Theme.accent-green : Theme.accent-purple;
+                        border-radius: 4px;
+                    }
+
+                    Text {
+                        text: round(SettingsBridge.ota-progress * 100) + "%";
+                        color: Theme.fg-primary;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // About
         Rectangle {
             background: Theme.bg-secondary;
             border-radius: 8px;
@@ -67,31 +131,13 @@ export component TabSettings inherits Rectangle {
                 padding: 16px;
                 spacing: 8px;
 
-                Text {
-                    text: "About";
-                    color: Theme.fg-primary;
-                    font-size: 14px;
-                    font-weight: 600;
-                }
-                Text {
-                    text: "KaSe Controller v0.6.0";
-                    color: Theme.fg-secondary;
-                    font-size: 12px;
-                }
-                Text {
-                    text: "Split keyboard configurator — Slint UI port";
-                    color: Theme.fg-secondary;
-                    font-size: 12px;
-                }
-                Text {
-                    text: "Made with Slint";
-                    color: Theme.accent-purple;
-                    font-size: 11px;
-                }
+                Text { text: "About"; color: Theme.fg-primary; font-size: 14px; font-weight: 600; }
+                Text { text: "KeSp Controller v0.6.0"; color: Theme.fg-secondary; font-size: 12px; }
+                Text { text: "Split keyboard configurator"; color: Theme.fg-secondary; font-size: 12px; }
+                Text { text: "Made with Slint"; color: Theme.accent-purple; font-size: 11px; }
             }
         }
 
-        // Spacer
         Rectangle { vertical-stretch: 1; }
     }
 }
