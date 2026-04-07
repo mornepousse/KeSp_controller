@@ -1,6 +1,7 @@
-import { LineEdit, ComboBox, ScrollView } from "std-widgets.slint";
+import { LineEdit, ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "dark_button.slint";
+import { DarkComboBox } from "dark_combo_box.slint";
 import { KeySelectorBridge, KeymapBridge, KeyEntry, KeycapData } from "../globals.slint";
 import { KeyButton } from "key_button.slint";
 
@@ -169,13 +170,13 @@ export component KeySelector inherits Rectangle {
                         spacing: 6px;
                         height: 32px;
                         Text { text: "Mod:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
-                        mt-mod := ComboBox {
+                        mt-mod := DarkComboBox {
                             width: 80px;
                             model: ["Ctrl", "Shift", "Alt", "GUI", "RCtrl", "RShift", "RAlt", "RGUI"];
                             current-index: 1;
                         }
                         Text { text: "Key:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
-                        mt-key := ComboBox {
+                        mt-key := DarkComboBox {
                             width: 70px;
                             model: ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","1","2","3","4","5","6","7","8","9","0","Space","Enter","Esc","Tab","Bksp"];
                             current-index: 0;
@@ -201,13 +202,13 @@ export component KeySelector inherits Rectangle {
                         spacing: 6px;
                         height: 32px;
                         Text { text: "Layer:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
-                        lt-layer := ComboBox {
+                        lt-layer := DarkComboBox {
                             width: 50px;
                             model: ["0","1","2","3","4","5","6","7","8","9"];
                             current-index: 1;
                         }
                         Text { text: "Key:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
-                        lt-key := ComboBox {
+                        lt-key := DarkComboBox {
                             width: 80px;
                             model: ["Space","Enter","Esc","Bksp","Tab","A","B","C","D","E"];
                             current-index: 0;

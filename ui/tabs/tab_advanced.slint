@@ -1,6 +1,7 @@
-import { ComboBox, ScrollView } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
+import { DarkComboBox } from "../components/dark_combo_box.slint";
 import { AdvancedBridge, AppState, ConnectionState, KeymapBridge } from "../globals.slint";
 
 component SectionHeader inherits Text {
@@ -44,7 +45,7 @@ component PickButton inherits Rectangle {
     }
 }
 
-component ModComboBox inherits ComboBox {
+component ModComboBox inherits DarkComboBox {
     model: ["None", "Ctrl", "Shift", "Alt", "GUI", "RCtrl", "RShift", "RAlt", "RGUI"];
     width: 90px;
 }
@@ -300,11 +301,11 @@ export component TabAdvanced inherits Rectangle {
                             spacing: 8px;
                             alignment: start;
                             Text { text: "L1:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
-                            ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l1-idx; }
+                            DarkComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l1-idx; }
                             Text { text: "L2:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
-                            ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l2-idx; }
+                            DarkComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l2-idx; }
                             Text { text: "-> L3:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
-                            ComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l3-idx; }
+                            DarkComboBox { width: 50px; model: ["0","1","2","3","4","5","6","7","8","9"]; current-index <=> AdvancedBridge.tri-l3-idx; }
                             DarkButton { text: "Set"; clicked => { AdvancedBridge.set-trilayer(AdvancedBridge.tri-l1-idx, AdvancedBridge.tri-l2-idx, AdvancedBridge.tri-l3-idx); } }
                         }
                     }

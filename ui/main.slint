@@ -1,4 +1,3 @@
-import { TabWidget } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { AppState, ActiveTab } from "globals.slint";
 import { ConnectionBar } from "components/connection_bar.slint";
@@ -14,6 +13,37 @@ import { TabFlasher } from "tabs/tab_flasher.slint";
 export { AppState, Theme }
 export { ConnectionBridge, KeymapBridge, SettingsBridge, StatsBridge, AdvancedBridge, MacroBridge, FlasherBridge, KeySelectorBridge } from "globals.slint";
 
+component DarkTab inherits Rectangle {
+    in property <string> title;
+    in property <bool> active;
+    callback clicked();
+
+    height: 32px;
+    horizontal-stretch: 1;
+    border-radius: 4px;
+    background: root.active ? Theme.bg-secondary : transparent;
+
+    Text {
+        text: root.title;
+        color: root.active ? Theme.fg-primary : Theme.fg-secondary;
+        font-size: 12px;
+        font-weight: root.active ? 600 : 400;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    Rectangle {
+        y: parent.height - 2px;
+        height: 2px;
+        background: root.active ? Theme.accent-purple : transparent;
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+        mouse-cursor: pointer;
+    }
+}
+
 export component MainWindow inherits Window {
     title: "KaSe Controller";
     preferred-width: 1000px;
@@ -22,36 +52,42 @@ export component MainWindow inherits Window {
     min-height: 450px;
     background: Theme.bg-primary;
 
+    in-out property <int> current-tab: 0;
+
     VerticalLayout {
         ConnectionBar { }
 
-        TabWidget {
-            vertical-stretch: 1;
+        // Tab bar
+        Rectangle {
+            height: 34px;
+            background: Theme.bg-primary;
 
-            Tab {
-                title: "Keymap";
-                TabKeymap { }
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 2px;
+
+                DarkTab { title: "Keymap"; active: root.current-tab == 0; clicked => { root.current-tab = 0; } }
+                DarkTab { title: "Advanced"; active: root.current-tab == 1; clicked => { root.current-tab = 1; } }
+                DarkTab { title: "Macros"; active: root.current-tab == 2; clicked => { root.current-tab = 2; } }
+                DarkTab { title: "Stats"; active: root.current-tab == 3; clicked => { root.current-tab = 3; } }
+                DarkTab { title: "Settings"; active: root.current-tab == 4; clicked => { root.current-tab = 4; } }
+                DarkTab { title: "Flash"; active: root.current-tab == 5; clicked => { root.current-tab = 5; } }
             }
-            Tab {
-                title: "Advanced";
-                TabAdvanced { }
-            }
-            Tab {
-                title: "Macros";
-                TabMacros { }
-            }
-            Tab {
-                title: "Stats";
-                TabStats { }
-            }
-            Tab {
-                title: "Settings";
-                TabSettings { }
-            }
-            Tab {
-                title: "Flash";
-                TabFlasher { }
-            }
+        }
+
+        // Tab content
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.bg-secondary;
+            border-radius: 4px;
+
+            if root.current-tab == 0 : TabKeymap { }
+            if root.current-tab == 1 : TabAdvanced { }
+            if root.current-tab == 2 : TabMacros { }
+            if root.current-tab == 3 : TabStats { }
+            if root.current-tab == 4 : TabSettings { }
+            if root.current-tab == 5 : TabFlasher { }
         }
 
         StatusBar { }

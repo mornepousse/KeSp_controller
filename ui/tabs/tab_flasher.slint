@@ -1,6 +1,7 @@
-import { ComboBox, LineEdit } from "std-widgets.slint";
+import { LineEdit } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
+import { DarkComboBox } from "../components/dark_combo_box.slint";
 import { FlasherBridge } from "../globals.slint";
 
 export component TabFlasher inherits Rectangle {
@@ -44,7 +45,7 @@ export component TabFlasher inherits Rectangle {
                 HorizontalLayout {
                     spacing: 8px;
 
-                    if FlasherBridge.prog-ports.length > 0 : ComboBox {
+                    if FlasherBridge.prog-ports.length > 0 : DarkComboBox {
                         horizontal-stretch: 1;
                         model: FlasherBridge.prog-ports;
                         selected(value) => {
@@ -89,7 +90,7 @@ export component TabFlasher inherits Rectangle {
                     font-weight: 600;
                 }
 
-                ComboBox {
+                DarkComboBox {
                     model: ["factory (0x20000)", "ota_0 (0x220000)"];
                     current-index <=> FlasherBridge.flash-offset-index;
                 }

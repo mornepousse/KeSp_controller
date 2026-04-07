@@ -1,0 +1,83 @@
+import { Theme } from "../theme.slint";
+
+export component DarkComboBox inherits Rectangle {
+    in property <[string]> model;
+    in-out property <int> current-index: 0;
+    in-out property <string> current-value: model.length > 0 && current-index >= 0 && current-index < model.length ? model[current-index] : "";
+    callback selected(string);
+
+    height: 28px;
+    min-width: 60px;
+    border-radius: 4px;
+    background: ta.has-hover ? Theme.button-hover : Theme.button-bg;
+    border-width: 1px;
+    border-color: Theme.bg-primary;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 6px;
+        spacing: 4px;
+
+        Text {
+            text: root.current-value;
+            color: Theme.fg-primary;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        Text {
+            text: "v";
+            color: Theme.fg-secondary;
+            font-size: 9px;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        clicked => { popup.show(); }
+        mouse-cursor: pointer;
+    }
+
+    popup := PopupWindow {
+        x: 0;
+        y: root.height;
+        width: root.width;
+
+        Rectangle {
+            background: Theme.bg-primary;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.accent-purple;
+
+            VerticalLayout {
+                padding: 2px;
+
+                for item[idx] in root.model : Rectangle {
+                    height: 26px;
+                    border-radius: 3px;
+                    background: item-ta.has-hover ? Theme.button-hover : idx == root.current-index ? Theme.bg-secondary : transparent;
+
+                    Text {
+                        text: item;
+                        color: idx == root.current-index ? Theme.accent-purple : Theme.fg-primary;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        horizontal-alignment: left;
+                        x: 8px;
+                    }
+
+                    item-ta := TouchArea {
+                        clicked => {
+                            root.current-index = idx;
+                            root.current-value = item;
+                            root.selected(item);
+                        }
+                        mouse-cursor: pointer;
+                    }
+                }
+            }
+        }
+    }
+}
