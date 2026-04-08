@@ -253,6 +253,7 @@ export global MacroBridge {
     callback save-macro();    // reads slot, name, steps from properties
     callback delete-macro(int);
     callback add-delay-step(int); // delay in ms (50, 100, 200, 500)
+    callback add-shortcut(string); // e.g. "ctrl+c", "ctrl+shift+z"
     callback remove-last-step();
     callback clear-steps();
 }

@@ -4,147 +4,187 @@ import { DarkButton } from "../components/dark_button.slint";
 import { KeymapBridge, AppState, ConnectionState } from "../globals.slint";
 import { KeyboardView } from "../components/keyboard_view.slint";
 
-export component TabKeymap inherits VerticalLayout {
+export component TabKeymap inherits Rectangle {
     in-out property <bool> renaming: false;
 
-    padding: 8px;
-    spacing: 6px;
-
-    // Main area: layers sidebar + keyboard
-    HorizontalLayout {
-        vertical-stretch: 1;
+    VerticalLayout {
+        padding: 8px;
         spacing: 6px;
 
-        // Layer sidebar (vertical)
-        VerticalLayout {
-            width: 90px;
-            spacing: 4px;
-            alignment: start;
+        // Main area: layers sidebar + keyboard
+        HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: 6px;
 
-            Text {
-                text: "Layers";
-                color: Theme.fg-secondary;
-                font-size: 11px;
-                horizontal-alignment: center;
-            }
-
-            Flickable {
-                vertical-stretch: 1;
-                VerticalLayout {
-                    spacing: 4px;
-
-            for layer[idx] in KeymapBridge.layers : Rectangle {
-                height: 30px;
-                border-radius: 4px;
-                background: layer.active ? Theme.accent-purple : Theme.button-bg;
+            // Layer sidebar (vertical)
+            VerticalLayout {
+                width: 90px;
+                spacing: 4px;
+                alignment: start;
 
                 Text {
-                    text: layer.name;
-                    color: Theme.fg-primary;
+                    text: "Layers";
+                    color: Theme.fg-secondary;
                     font-size: 11px;
                     horizontal-alignment: center;
+                }
+
+                Flickable {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        spacing: 4px;
+
+                        for layer[idx] in KeymapBridge.layers : Rectangle {
+                            height: 30px;
+                            border-radius: 4px;
+                            background: layer.active ? Theme.accent-purple : Theme.button-bg;
+
+                            Text {
+                                text: layer.name;
+                                color: Theme.fg-primary;
+                                font-size: 11px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            TouchArea {
+                                clicked => { KeymapBridge.switch-layer(layer.index); }
+                                mouse-cursor: pointer;
+                            }
+                        }
+                    }
+                }
+
+                if !root.renaming && AppState.connection == ConnectionState.connected : Rectangle {
+                    height: 24px;
+                    border-radius: 4px;
+                    background: rename-ta.has-hover ? Theme.button-hover : Theme.button-bg;
+
+                    Text {
+                        text: "Rename";
+                        color: Theme.fg-secondary;
+                        font-size: 10px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    rename-ta := TouchArea {
+                        clicked => { root.renaming = true; }
+                        mouse-cursor: pointer;
+                    }
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                // Heatmap toggle
+                Rectangle {
+                    height: 30px;
+                    border-radius: 4px;
+                    background: KeymapBridge.heatmap-enabled ? Theme.accent-orange : Theme.button-bg;
+
+                    Text {
+                        text: "Heatmap";
+                        color: Theme.fg-primary;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        clicked => {
+                            KeymapBridge.heatmap-enabled = !KeymapBridge.heatmap-enabled;
+                            if KeymapBridge.heatmap-enabled { KeymapBridge.toggle-heatmap(); }
+                        }
+                        mouse-cursor: pointer;
+                    }
+                }
+            }
+
+            // Keyboard view
+            KeyboardView {
+                horizontal-stretch: 1;
+            }
+        }
+
+        // Selected key info bar
+        if KeymapBridge.selected-key-index >= 0 : Rectangle {
+            height: 36px;
+            background: Theme.bg-secondary;
+            border-radius: 4px;
+
+            HorizontalLayout {
+                padding: 8px;
+                spacing: 12px;
+
+                Text {
+                    text: "Selected: " + KeymapBridge.selected-key-label;
+                    color: Theme.accent-cyan;
+                    font-size: 12px;
                     vertical-alignment: center;
                 }
 
-                TouchArea {
-                    clicked => { KeymapBridge.switch-layer(layer.index); }
-                    mouse-cursor: pointer;
-                }
-            }
-                }
-            }
+                Rectangle { horizontal-stretch: 1; }
 
-            // Rename
-            if root.renaming : VerticalLayout {
-                spacing: 4px;
+                DarkButton {
+                    text: "Change Key...";
+                    clicked => {
+                        KeymapBridge.key-selector-open = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // Rename popup overlay
+    if root.renaming : Rectangle {
+        background: #000000aa;
+
+        TouchArea {
+            clicked => { root.renaming = false; }
+        }
+
+        Rectangle {
+            width: 260px;
+            height: 120px;
+            border-radius: 8px;
+            background: Theme.bg-secondary;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+                alignment: center;
+
+                Text {
+                    text: "Rename layer";
+                    color: Theme.fg-primary;
+                    font-size: 13px;
+                    horizontal-alignment: center;
+                }
+
                 rename-input := DarkLineEdit {
-                    max-width: 85px;
                     placeholder-text: "New name";
                     accepted(text) => {
                         KeymapBridge.rename-layer(KeymapBridge.active-layer, text);
                         root.renaming = false;
                     }
                 }
-                DarkButton {
-                    text: "Cancel";
-                    clicked => { root.renaming = false; }
-                }
-            }
 
-            if !root.renaming && AppState.connection == ConnectionState.connected : Rectangle {
-                height: 24px;
-                border-radius: 4px;
-                background: rename-ta.has-hover ? Theme.button-hover : Theme.button-bg;
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: center;
 
-                Text {
-                    text: "Rename";
-                    color: Theme.fg-secondary;
-                    font-size: 10px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
+                    DarkButton {
+                        text: "Cancel";
+                        clicked => { root.renaming = false; }
+                    }
 
-                rename-ta := TouchArea {
-                    clicked => { root.renaming = true; }
-                    mouse-cursor: pointer;
-                }
-            }
-
-            Rectangle { vertical-stretch: 1; }
-
-            // Heatmap toggle
-            Rectangle {
-                height: 30px;
-                border-radius: 4px;
-                background: KeymapBridge.heatmap-enabled ? Theme.accent-orange : Theme.button-bg;
-
-                Text {
-                    text: "Heatmap";
-                    color: Theme.fg-primary;
-                    font-size: 11px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-
-                TouchArea {
-                    clicked => {
-                                KeymapBridge.heatmap-enabled = !KeymapBridge.heatmap-enabled;
-                                if KeymapBridge.heatmap-enabled { KeymapBridge.toggle-heatmap(); }
-                            }
-                    mouse-cursor: pointer;
-                }
-            }
-        }
-
-        // Keyboard view
-        KeyboardView {
-            horizontal-stretch: 1;
-        }
-    }
-
-    // Selected key info bar
-    if KeymapBridge.selected-key-index >= 0 : Rectangle {
-        height: 36px;
-        background: Theme.bg-secondary;
-        border-radius: 4px;
-
-        HorizontalLayout {
-            padding: 8px;
-            spacing: 12px;
-
-            Text {
-                text: "Selected: " + KeymapBridge.selected-key-label;
-                color: Theme.accent-cyan;
-                font-size: 12px;
-                vertical-alignment: center;
-            }
-
-            Rectangle { horizontal-stretch: 1; }
-
-            DarkButton {
-                text: "Change Key...";
-                clicked => {
-                    KeymapBridge.key-selector-open = true;
+                    DarkButton {
+                        text: "Rename";
+                        clicked => {
+                            KeymapBridge.rename-layer(KeymapBridge.active-layer, rename-input.text);
+                            root.renaming = false;
+                        }
+                    }
                 }
             }
         }

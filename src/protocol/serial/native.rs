@@ -3,8 +3,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::binary_protocol::{self as bp, KrResponse};
-use crate::parsers::{ROWS, COLS};
+use crate::protocol::binary::{self as bp, KrResponse};
+use crate::protocol::parsers::{ROWS, COLS};
 
 const BAUD_RATE: u32 = 115200;
 const CONNECT_TIMEOUT_MS: u64 = 300;
@@ -35,10 +35,24 @@ impl SerialManager {
     pub fn list_ports() -> Vec<String> {
         let available = serialport::available_ports();
         let ports = available.unwrap_or_default();
-        let port_iter = ports.into_iter();
-        let name_iter = port_iter.map(|p| p.port_name);
-        let names: Vec<String> = name_iter.collect();
-        names
+        ports.into_iter().map(|p| p.port_name).collect()
+    }
+
+    /// List only ports that look like ESP32 programming ports (CH340, CP210x, FTDI).
+    pub fn list_prog_ports() -> Vec<String> {
+        const CH340_VID: u16 = 0x1A86;
+        const CP210X_VID: u16 = 0x10C4;
+        const FTDI_VID: u16 = 0x0403;
+
+        let available = serialport::available_ports();
+        let ports = available.unwrap_or_default();
+        ports.into_iter()
+            .filter(|p| {
+                matches!(&p.port_type, serialport::SerialPortType::UsbPort(usb)
+                    if usb.vid == CH340_VID || usb.vid == CP210X_VID || usb.vid == FTDI_VID)
+            })
+            .map(|p| p.port_name)
+            .collect()
     }
 
     pub fn connect(&mut self, port_name: &str) -> Result<(), String> {

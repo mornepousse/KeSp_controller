@@ -37,7 +37,9 @@ export component TabMacros inherits Rectangle {
 
                 HorizontalLayout {
                     spacing: 8px;
-                    alignment: start;
+
+                    Text { text: "Slot:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
+                    Text { text: "#" + MacroBridge.new-slot-idx; color: Theme.accent-purple; font-size: 12px; font-weight: 600; vertical-alignment: center; }
 
                     Text { text: "Name:"; color: Theme.fg-secondary; font-size: 12px; vertical-alignment: center; }
                     DarkLineEdit {
@@ -100,6 +102,23 @@ export component TabMacros inherits Rectangle {
 
                     DarkButton { text: "Undo"; clicked => { MacroBridge.remove-last-step(); } }
                     DarkButton { text: "Clear"; clicked => { MacroBridge.clear-steps(); } }
+                }
+
+                // Common shortcuts
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+
+                    Text { text: "Shortcuts:"; color: Theme.fg-secondary; font-size: 11px; vertical-alignment: center; }
+
+                    DarkButton { text: "Ctrl+C"; clicked => { MacroBridge.add-shortcut("ctrl+c"); } }
+                    DarkButton { text: "Ctrl+V"; clicked => { MacroBridge.add-shortcut("ctrl+v"); } }
+                    DarkButton { text: "Ctrl+X"; clicked => { MacroBridge.add-shortcut("ctrl+x"); } }
+                    DarkButton { text: "Ctrl+Z"; clicked => { MacroBridge.add-shortcut("ctrl+z"); } }
+                    DarkButton { text: "Ctrl+Y"; clicked => { MacroBridge.add-shortcut("ctrl+y"); } }
+                    DarkButton { text: "Ctrl+S"; clicked => { MacroBridge.add-shortcut("ctrl+s"); } }
+                    DarkButton { text: "Ctrl+A"; clicked => { MacroBridge.add-shortcut("ctrl+a"); } }
+                    DarkButton { text: "Alt+F4"; clicked => { MacroBridge.add-shortcut("alt+f4"); } }
                 }
 
                 // Save
