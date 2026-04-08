@@ -643,23 +643,17 @@ pub fn flash_firmware(
     }
 
     // ------------------------------------------------------------------ //
-    // Step 8: FLASH_END                                                    //
-    //                                                                       //
-    // We pass reboot=false here so the chip stays in bootloader mode for   //
-    // the MD5 verification step that follows.  A hard reset is done after. //
-    // ------------------------------------------------------------------ //
-    send_progress(0.92, "Finalizing write...".into());
-    flash_end(&mut port, false)?;
-
-    // ------------------------------------------------------------------ //
-    // Step 8b: Erase otadata partition (0xF000, 8KB) when flashing factory //
+    // Step 8: Erase otadata when flashing factory                          //
     //                                                                       //
     // If we just wrote to the factory partition, the bootloader might       //
     // still have otadata pointing to ota_0. We erase otadata to force      //
     // the bootloader to fall back to factory on next boot.                 //
+    //                                                                       //
+    // The ROM accepts consecutive flash_begin calls without flash_end in   //
+    // between — no need to end+re-sync between the two flash sequences.    //
     // ------------------------------------------------------------------ //
     if offset == 0x20000 {
-        send_progress(0.93, "Erasing otadata (force factory boot)...".into());
+        send_progress(0.92, "Erasing otadata (force factory boot)...".into());
         const OTADATA_OFFSET: u32 = 0xF000;
         const OTADATA_SIZE: u32 = 0x2000; // 8 KB
         flash_begin(&mut port, OTADATA_OFFSET, OTADATA_SIZE, FLASH_BLOCK_SIZE)?;
@@ -668,8 +662,13 @@ pub fn flash_firmware(
         for i in 0..otadata_blocks {
             flash_data(&mut port, i, &empty_block)?;
         }
-        flash_end(&mut port, false)?;
     }
+
+    // ------------------------------------------------------------------ //
+    // Step 9: FLASH_END — stay in bootloader for MD5 verification          //
+    // ------------------------------------------------------------------ //
+    send_progress(0.93, "Finalizing write...".into());
+    flash_end(&mut port, false)?;
 
     // ------------------------------------------------------------------ //
     // Step 9: MD5 post-write verification                                  //
