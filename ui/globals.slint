@@ -264,7 +264,7 @@ export global FlasherBridge {
     in property <[string]> prog-ports;
     in-out property <string> selected-prog-port: "";
     in-out property <string> firmware-path: "";
-    in-out property <int> flash-offset-index: 0; // 0=factory(0x20000), 1=ota_0(0x220000)
+    in-out property <int> flash-offset-index: 1; // 0=full(0x0), 1=factory(0x20000), 2=ota_0(0x220000)
     in property <float> flash-progress: 0;
     in property <string> flash-status: "";
     in property <bool> flashing: false;

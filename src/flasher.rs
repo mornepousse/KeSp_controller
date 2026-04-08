@@ -78,8 +78,9 @@ fn setup_flash(window: &MainWindow, ctx: &AppContext) {
         let port = flasher.get_selected_prog_port().to_string();
         let path = flasher.get_firmware_path().to_string();
         let offset: u32 = match flasher.get_flash_offset_index() {
-            0 => 0x20000,   // factory
-            1 => 0x220000,  // ota_0
+            0 => 0x0,       // full flash
+            1 => 0x20000,   // factory
+            2 => 0x220000,  // ota_0
             _ => 0x20000,
         };
 
