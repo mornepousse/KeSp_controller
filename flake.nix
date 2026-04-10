@@ -15,11 +15,11 @@
         assets = {
           x86_64-linux = {
             url = "https://github.com/mornepousse/KeSp_controller/releases/download/v${version}/KeSp_controller-linux-x86_64";
-            hash = "0h2l0xi4wm620zl559q9zvcbrarmfsf87gcj7qi8y4lzzw7sdjbc";
+            hash = "sha256-bMmmD/+fEo8iPpK9g5x2Nau82P4Jp1LoB8JUTmIHVEA=";
           };
           aarch64-darwin = {
             url = "https://github.com/mornepousse/KeSp_controller/releases/download/v${version}/KeSp_controller-macos-arm64";
-            hash = "010l8y6jcbxsbarrv9ablx8gylavdx8iqrv9br7y5zpcqrwkjd55";
+            hash = "sha256-pTQ5ecbs/uJPXmlnHFFvW1H/UKdLpZ2zWrovJo1HFAQ=";
           };
         };
 
