@@ -294,6 +294,7 @@ export global LayoutBridge {
 export global ToolsBridge {
     in-out property <bool> matrix-test-active: false;
     in property <string> matrix-test-status: "";
+    in property <string> matrix-log: "";
     // Keycap model with live press state (reuses KeycapData, color = press state)
     in property <[KeycapData]> matrix-keycaps;
     in property <length> matrix-content-width: 860px;

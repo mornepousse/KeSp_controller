@@ -364,6 +364,7 @@ fn handle_msg(
                 tb.set_matrix_content_width(max_x);
                 tb.set_matrix_content_height(max_y);
                 tb.set_matrix_keycaps(ModelRc::from(model));
+                tb.set_matrix_log(SharedString::default());
                 tb.set_matrix_test_status(SharedString::from("Matrix test active — press keys"));
             } else {
                 tb.set_matrix_test_status(SharedString::from("Matrix test stopped"));
@@ -387,6 +388,15 @@ fn handle_msg(
                     break;
                 }
             }
+            // Prepend to log (newest on top, keep last 7 lines)
+            let action = if state == 1 { "pressed" } else { "released" };
+            let line = format!("R{}C{} {}", row, col, action);
+            let prev = tb.get_matrix_log().to_string();
+            let log: String = std::iter::once(line.as_str())
+                .chain(prev.lines().take(6))
+                .collect::<Vec<_>>()
+                .join("\n");
+            tb.set_matrix_log(SharedString::from(log));
         }
         BgMsg::MatrixTestError(e) => {
             let tb = window.global::<ToolsBridge>();

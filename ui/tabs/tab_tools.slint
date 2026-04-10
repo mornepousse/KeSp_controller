@@ -245,6 +245,25 @@ export component TabTools inherits Rectangle {
                             }
                         }
                     }
+
+                    // Event log console
+                    if ToolsBridge.matrix-test-active || ToolsBridge.matrix-log != "" : Rectangle {
+                        height: 120px;
+                        background: Theme.bg-primary;
+                        border-radius: 4px;
+
+                        VerticalLayout {
+                            padding: 8px;
+
+                            Text {
+                                text: ToolsBridge.matrix-log;
+                                color: Theme.fg-secondary;
+                                font-size: 10px;
+                                font-family: "monospace";
+                                overflow: elide;
+                            }
+                        }
+                    }
                 }
             }
 
