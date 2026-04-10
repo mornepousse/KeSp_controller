@@ -49,6 +49,9 @@ pub enum BgMsg {
     OtaDone(Result<(), String>),
     ConfigProgress(f32, String),
     ConfigDone(Result<String, String>),
+    MatrixTestToggled(bool, u8, u8), // enabled, rows, cols
+    MatrixTestEvent(u8, u8, u8),     // row, col, state (1=pressed, 0=released)
+    MatrixTestError(String),
 }
 
 /// Spawn a background thread that locks the serial port and runs `f`.

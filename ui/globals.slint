@@ -289,6 +289,18 @@ export global LayoutBridge {
     callback export-json();
 }
 
+// ---- Matrix Test ----
+
+export global ToolsBridge {
+    in-out property <bool> matrix-test-active: false;
+    in property <string> matrix-test-status: "";
+    // Keycap model with live press state (reuses KeycapData, color = press state)
+    in property <[KeycapData]> matrix-keycaps;
+    in property <length> matrix-content-width: 860px;
+    in property <length> matrix-content-height: 360px;
+    callback toggle-matrix-test();
+}
+
 // ---- Key Selector ----
 
 export struct KeyEntry {

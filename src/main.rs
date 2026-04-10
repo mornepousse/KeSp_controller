@@ -12,6 +12,7 @@ mod flasher;
 mod layout;
 mod connection;
 mod key_selector;
+mod tools;
 
 slint::include_modules!();
 
@@ -53,6 +54,7 @@ fn main() {
     settings::setup(&window, &ctx);
     flasher::setup(&window, &ctx);
     layout::setup(&window, &ctx);
+    tools::setup(&window, &ctx);
 
     dispatch::run(&window, &ctx, bg_rx);
 }

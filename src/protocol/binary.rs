@@ -78,6 +78,9 @@ pub mod cmd {
     pub const TAMA_MEDICINE: u8 = 0xA6;
     pub const TAMA_SAVE: u8 = 0xA7;
 
+    // Diagnostics
+    pub const MATRIX_TEST: u8 = 0xB0;
+
     // OTA
     pub const OTA_START: u8 = 0xF0;
     pub const OTA_DATA: u8 = 0xF1;
@@ -284,4 +287,22 @@ pub fn parse_kr(data: &[u8]) -> Result<(KrResponse, usize), String> {
 
     let consumed = payload_end + 1 - pos;
     Ok((KrResponse { cmd, status, payload }, consumed))
+}
+
+/// Parse all KR frames from a byte buffer (for unsolicited events).
+pub fn parse_all_kr(data: &[u8]) -> Vec<KrResponse> {
+    let mut results = Vec::new();
+    let mut offset = 0;
+    while offset < data.len() {
+        match parse_kr(&data[offset..]) {
+            Ok((resp, consumed)) => {
+                offset += consumed;
+                results.push(resp);
+            }
+            Err(_) => {
+                offset += 1; // skip garbage byte
+            }
+        }
+    }
+    results
 }

@@ -3,7 +3,7 @@ import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
 import { DarkCheckbox } from "../components/dark_checkbox.slint";
 import { DarkComboBox } from "../components/dark_combo_box.slint";
-import { FlasherBridge, LayoutBridge, KeycapData, AppState, ConnectionState } from "../globals.slint";
+import { FlasherBridge, LayoutBridge, ToolsBridge, KeycapData, AppState, ConnectionState } from "../globals.slint";
 import { ScrollView } from "std-widgets.slint";
 
 export component TabTools inherits Rectangle {
@@ -152,6 +152,96 @@ export component TabTools inherits Rectangle {
                                 font-size: 10px;
                                 font-family: "monospace";
                                 wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===================== MATRIX TEST =====================
+            Rectangle {
+                background: Theme.bg-secondary;
+                border-radius: 8px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        Text {
+                            text: "Matrix Test";
+                            color: Theme.accent-cyan;
+                            font-size: 14px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+
+                        Rectangle { horizontal-stretch: 1; }
+
+                        DarkButton {
+                            text: ToolsBridge.matrix-test-active ? "Stop Test" : "Start Test";
+                            primary: !ToolsBridge.matrix-test-active;
+                            enabled: AppState.connection == ConnectionState.connected;
+                            clicked => { ToolsBridge.toggle-matrix-test(); }
+                        }
+                    }
+
+                    if ToolsBridge.matrix-test-status != "" : Text {
+                        text: ToolsBridge.matrix-test-status;
+                        color: ToolsBridge.matrix-test-active ? Theme.accent-green : Theme.fg-secondary;
+                        font-size: 11px;
+                    }
+
+                    // Keyboard render for matrix test
+                    matrix-area := Rectangle {
+                        height: 260px;
+                        background: Theme.bg-surface;
+                        border-radius: 8px;
+                        clip: true;
+
+                        property <float> scale-x: self.width / ToolsBridge.matrix-content-width;
+                        property <float> scale-y: self.height / ToolsBridge.matrix-content-height;
+                        property <float> scale: min(scale-x, scale-y) * 0.95;
+                        property <length> offset-x: (self.width - ToolsBridge.matrix-content-width * scale) / 2;
+                        property <length> offset-y: (self.height - ToolsBridge.matrix-content-height * scale) / 2;
+
+                        if ToolsBridge.matrix-keycaps.length == 0 : Text {
+                            text: "Press \"Start Test\" to begin";
+                            color: Theme.fg-secondary;
+                            font-size: 13px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        for keycap[idx] in ToolsBridge.matrix-keycaps : Rectangle {
+                            x: matrix-area.offset-x + keycap.x * matrix-area.scale;
+                            y: matrix-area.offset-y + keycap.y * matrix-area.scale;
+                            width: keycap.w * matrix-area.scale;
+                            height: keycap.h * matrix-area.scale;
+                            background: transparent;
+
+                            Rectangle {
+                                width: 100%;
+                                height: 100%;
+                                border-radius: 4px;
+                                background: keycap.color;
+                                border-width: 1px;
+                                border-color: Theme.bg-primary;
+                                transform-rotation: keycap.rotation * 1deg;
+                                transform-origin: {
+                                    x: self.width / 2,
+                                    y: self.height / 2,
+                                };
+
+                                Text {
+                                    text: keycap.label;
+                                    color: Theme.fg-primary;
+                                    font-size: max(7px, 10px * matrix-area.scale);
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
                             }
                         }
                     }

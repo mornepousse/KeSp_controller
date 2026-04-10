@@ -5,7 +5,7 @@ use crate::{
     AdvancedBridge, AppState, BigramData, ComboData, ConnectionState, FingerLoadData,
     FlasherBridge, HandBalanceData, KeyOverrideData, KeymapBridge, LayoutBridge, LeaderData,
     MacroBridge, MacroData, MainWindow, RowUsageData, SettingsBridge, StatsBridge,
-    TapDanceAction, TapDanceData, TopKeyData, LayerInfo,
+    TapDanceAction, TapDanceData, ToolsBridge, TopKeyData, LayerInfo,
 };
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::rc::Rc;
@@ -339,6 +339,59 @@ fn handle_msg(
                 Ok(msg) => { s.set_config_progress(1.0); s.set_config_status(SharedString::from(msg)); }
                 Err(e) => { s.set_config_progress(0.0); s.set_config_status(SharedString::from(format!("Error: {}", e))); }
             }
+        }
+        BgMsg::MatrixTestToggled(enabled, _rows, _cols) => {
+            let tb = window.global::<ToolsBridge>();
+            tb.set_matrix_test_active(enabled);
+            if enabled {
+                // Build matrix keycap model from current keys
+                let keys = keys_arc.borrow();
+                let model = models::build_keycap_model(&keys);
+                // Reset all colors to default (grey)
+                for i in 0..model.row_count() {
+                    let mut item = model.row_data(i).unwrap();
+                    item.color = slint::Color::from_argb_u8(255, 0x44, 0x47, 0x5a);
+                    item.label = SharedString::from(format!("R{}C{}", keys[i].row, keys[i].col));
+                    item.heat = 0.0;
+                    model.set_row_data(i, item);
+                }
+                let mut max_x: f32 = 0.0;
+                let mut max_y: f32 = 0.0;
+                for kp in keys.iter() {
+                    if kp.x + kp.w > max_x { max_x = kp.x + kp.w; }
+                    if kp.y + kp.h > max_y { max_y = kp.y + kp.h; }
+                }
+                tb.set_matrix_content_width(max_x);
+                tb.set_matrix_content_height(max_y);
+                tb.set_matrix_keycaps(ModelRc::from(model));
+                tb.set_matrix_test_status(SharedString::from("Matrix test active — press keys"));
+            } else {
+                tb.set_matrix_test_status(SharedString::from("Matrix test stopped"));
+            }
+        }
+        BgMsg::MatrixTestEvent(row, col, state) => {
+            let tb = window.global::<ToolsBridge>();
+            let keycaps = tb.get_matrix_keycaps();
+            let keys = keys_arc.borrow();
+            // Find the keycap matching this row/col
+            for i in 0..keycaps.row_count() {
+                if i >= keys.len() { break; }
+                if keys[i].row == row as usize && keys[i].col == col as usize {
+                    let mut item = keycaps.row_data(i).unwrap();
+                    if state == 1 {
+                        item.color = slint::Color::from_argb_u8(255, 0x50, 0xFA, 0x7B); // green = pressed
+                    } else {
+                        item.color = slint::Color::from_argb_u8(255, 0xBD, 0x93, 0xF9); // purple = was activated
+                    }
+                    keycaps.set_row_data(i, item);
+                    break;
+                }
+            }
+        }
+        BgMsg::MatrixTestError(e) => {
+            let tb = window.global::<ToolsBridge>();
+            tb.set_matrix_test_active(false);
+            tb.set_matrix_test_status(SharedString::from(format!("Error: {}", e)));
         }
         BgMsg::MacroList(macros) => {
             let model: Vec<MacroData> = macros.iter().map(|m| {
