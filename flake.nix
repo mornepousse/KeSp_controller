@@ -50,9 +50,19 @@
           dontUnpack = true;
 
           installPhase = ''
-            mkdir -p $out/bin
+            mkdir -p $out/bin $out/share/applications
             cp $src $out/bin/KeSp_controller
             chmod +x $out/bin/KeSp_controller
+
+            cat > $out/share/applications/kesp-controller.desktop << EOF
+            [Desktop Entry]
+            Type=Application
+            Name=KeSp Controller
+            Comment=Cross-platform configurator for the KeSp split ergonomic keyboard
+            Exec=KeSp_controller
+            Icon=preferences-desktop-keyboard
+            Categories=Utility;HardwareSettings;
+            EOF
           '';
 
           meta = with pkgs.lib; {
