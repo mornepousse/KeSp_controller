@@ -10,13 +10,21 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        version = "2.0.4";
 
-        nativeBuildInputs = with pkgs; [
-          pkg-config
-          cmake
-        ];
+        assets = {
+          x86_64-linux = {
+            url = "https://github.com/mornepousse/KeSp_controller/releases/download/v${version}/KeSp_controller-linux-x86_64";
+            hash = "0h2l0xi4wm620zl559q9zvcbrarmfsf87gcj7qi8y4lzzw7sdjbc";
+          };
+          aarch64-darwin = {
+            url = "https://github.com/mornepousse/KeSp_controller/releases/download/v${version}/KeSp_controller-macos-arm64";
+            hash = "010l8y6jcbxsbarrv9ablx8gylavdx8iqrv9br7y5zpcqrwkjd55";
+          };
+        };
 
-        buildInputs = with pkgs; [
+        # Runtime dependencies for Slint UI
+        runtimeLibs = with pkgs; [
           fontconfig
           libxkbcommon
           wayland
@@ -29,28 +37,38 @@
         ];
       in
       {
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+        packages.default = pkgs.stdenv.mkDerivation {
           pname = "kesp-controller";
-          version = "1.0.0";
-          src = ./.;
-          cargoLock.lockFile = ./Cargo.lock;
+          inherit version;
 
-          inherit nativeBuildInputs buildInputs;
+          src = pkgs.fetchurl assets.${system};
 
-          # Slint needs to find fontconfig at runtime
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
+          nativeBuildInputs = with pkgs; [ autoPatchelfHook ];
+          buildInputs = runtimeLibs;
+
+          dontUnpack = true;
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp $src $out/bin/KeSp_controller
+            chmod +x $out/bin/KeSp_controller
+          '';
 
           meta = with pkgs.lib; {
             description = "Cross-platform configurator for the KeSp split ergonomic keyboard";
             license = licenses.gpl3Only;
             mainProgram = "KeSp_controller";
+            platforms = builtins.attrNames assets;
           };
         };
 
+        # Dev shell for building from source
         devShells.default = pkgs.mkShell {
-          inherit nativeBuildInputs buildInputs;
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
-          packages = with pkgs; [ cargo rustc rust-analyzer clippy ];
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
+          packages = with pkgs; [
+            cargo rustc rust-analyzer clippy
+            pkg-config cmake
+          ] ++ runtimeLibs;
         };
       });
 }
