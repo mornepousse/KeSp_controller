@@ -29,6 +29,7 @@
           libxkbcommon
           wayland
           udev
+          stdenv.cc.cc.lib
         ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
           xorg.libX11
           xorg.libXcursor
