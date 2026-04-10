@@ -1,6 +1,5 @@
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
-import { DarkComboBox } from "../components/dark_combo_box.slint";
 import { SettingsBridge, AppState, ConnectionState } from "../globals.slint";
 
 export component TabSettings inherits Rectangle {
@@ -16,35 +15,6 @@ export component TabSettings inherits Rectangle {
             color: Theme.fg-primary;
             font-size: 20px;
             font-weight: 700;
-        }
-
-        // Keyboard layout
-        Rectangle {
-            background: Theme.bg-secondary;
-            border-radius: 8px;
-
-            HorizontalLayout {
-                padding: 16px;
-                spacing: 12px;
-
-                VerticalLayout {
-                    alignment: center;
-                    Text { text: "Keyboard Layout"; color: Theme.fg-primary; font-size: 14px; }
-                    Text { text: "Controls how keycodes are displayed"; color: Theme.fg-secondary; font-size: 11px; }
-                }
-
-                Rectangle { horizontal-stretch: 1; }
-
-                VerticalLayout {
-                    alignment: center;
-                    DarkComboBox {
-                        width: 200px;
-                        model: SettingsBridge.available-layouts;
-                        current-index <=> SettingsBridge.selected-layout-index;
-                        selected(value) => { SettingsBridge.change-layout(self.current-index); }
-                    }
-                }
-            }
         }
 
         // OTA Firmware Update

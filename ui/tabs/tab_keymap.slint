@@ -1,7 +1,8 @@
 import { DarkLineEdit } from "../components/dark_line_edit.slint";
+import { DarkComboBox } from "../components/dark_combo_box.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
-import { KeymapBridge, AppState, ConnectionState } from "../globals.slint";
+import { KeymapBridge, AppState, ConnectionState, SettingsBridge } from "../globals.slint";
 import { KeyboardView } from "../components/keyboard_view.slint";
 
 export component TabKeymap inherits Rectangle {
@@ -97,6 +98,14 @@ export component TabKeymap inherits Rectangle {
                         }
                         mouse-cursor: pointer;
                     }
+                }
+
+                // Keyboard language
+                DarkComboBox {
+                    width: 90px;
+                    model: SettingsBridge.available-layouts;
+                    current-index <=> SettingsBridge.selected-layout-index;
+                    selected(value) => { SettingsBridge.change-layout(self.current-index); }
                 }
             }
 

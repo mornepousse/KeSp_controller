@@ -44,7 +44,7 @@ pub fn init_models(
     window.global::<SettingsBridge>().set_selected_layout_index(idx as i32);
 
     // Key selector
-    let all_keys = build_key_entries();
+    let all_keys = build_key_entries_with_layout(&current);
     window.global::<KeySelectorBridge>().set_all_keys(ModelRc::from(all_keys.clone()));
     populate_key_categories(window, &all_keys, "");
 }
@@ -113,84 +113,33 @@ pub fn update_keycap_labels(
     }
 }
 
-pub fn build_key_entries() -> Rc<VecModel<KeyEntry>> {
+pub fn build_key_entries_with_layout(layout: &layout_remap::KeyboardLayout) -> Rc<VecModel<KeyEntry>> {
+    let hid_entry = |code: u16, category: &str| -> KeyEntry {
+        let base = keycode::hid_key_name(code as u8);
+        let name = layout_remap::remap_key_label(layout, &base)
+            .map(|s| s.to_string())
+            .unwrap_or(base);
+        KeyEntry { name: SharedString::from(name), code: code as i32, category: SharedString::from(category) }
+    };
     let mut entries = Vec::new();
 
-    for code in 0x04u16..=0x1D {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Letter"),
-        });
-    }
-    for code in 0x1Eu16..=0x27 {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Number"),
-        });
-    }
-    for code in [0x28u16, 0x29, 0x2A, 0x2B, 0x2C] {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Control"),
-        });
-    }
-    for code in 0x2Du16..=0x38 {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Symbol"),
-        });
-    }
-    for code in 0x3Au16..=0x45 {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Function"),
-        });
-    }
+    for code in 0x04u16..=0x1D { entries.push(hid_entry(code, "Letter")); }
+    for code in 0x1Eu16..=0x27 { entries.push(hid_entry(code, "Number")); }
+    for code in [0x28u16, 0x29, 0x2A, 0x2B, 0x2C] { entries.push(hid_entry(code, "Control")); }
+    for code in 0x2Du16..=0x38 { entries.push(hid_entry(code, "Symbol")); }
+    for code in 0x3Au16..=0x45 { entries.push(hid_entry(code, "Function")); }
     for code in [0x46u16, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52] {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Navigation"),
-        });
+        entries.push(hid_entry(code, "Navigation"));
     }
-    for code in 0xE0u16..=0xE7 {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Modifier"),
-        });
-    }
+    for code in 0xE0u16..=0xE7 { entries.push(hid_entry(code, "Modifier")); }
     entries.push(KeyEntry {
         name: SharedString::from("Caps Lock"),
         code: 0x39,
         category: SharedString::from("Control"),
     });
-    for code in 0x53u16..=0x63 {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Keypad"),
-        });
-    }
-    for code in 0x68u16..=0x73 {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Function"),
-        });
-    }
-    for code in [0x7Fu16, 0x80, 0x81] {
-        entries.push(KeyEntry {
-            name: SharedString::from(keycode::hid_key_name(code as u8)),
-            code: code as i32,
-            category: SharedString::from("Media"),
-        });
-    }
+    for code in 0x53u16..=0x63 { entries.push(hid_entry(code, "Keypad")); }
+    for code in 0x68u16..=0x73 { entries.push(hid_entry(code, "Function")); }
+    for code in [0x7Fu16, 0x80, 0x81] { entries.push(hid_entry(code, "Media")); }
     for (code, name) in [
         (0x2900u16, "BT Next"), (0x2A00, "BT Prev"), (0x2B00, "BT Pair"),
         (0x2C00, "BT Disc"), (0x2E00, "USB/BT"), (0x2F00, "BT On/Off"),

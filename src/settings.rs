@@ -4,10 +4,46 @@ use crate::{config, MainWindow, SettingsBridge};
 use slint::{ComponentHandle, SharedString};
 
 pub fn setup(window: &MainWindow, ctx: &AppContext) {
+    setup_change_layout(window, ctx);
     setup_ota_browse(window);
     setup_ota_start(window, ctx);
     setup_config_export(window, ctx);
     setup_config_import(window, ctx);
+}
+
+// --- Change keyboard layout (AZERTY / QWERTZ / ...) ---
+fn setup_change_layout(window: &MainWindow, ctx: &AppContext) {
+    let keyboard_layout = ctx.keyboard_layout.clone();
+    let keys = ctx.keys.clone();
+    let current_keymap = ctx.current_keymap.clone();
+    let window_weak = window.as_weak();
+
+    window.global::<SettingsBridge>().on_change_layout(move |idx| {
+        let all = protocol::layout_remap::KeyboardLayout::all();
+        let new_layout = all.get(idx as usize).copied().unwrap_or(all[0]);
+
+        // Update shared state
+        *keyboard_layout.borrow_mut() = new_layout;
+
+        // Persist to disk
+        let mut s = protocol::settings::load();
+        s.keyboard_layout = new_layout.name().to_string();
+        protocol::settings::save(&s);
+
+        // Refresh keycap labels + key selector popup
+        if let Some(w) = window_weak.upgrade() {
+            let keycaps = w.global::<crate::KeymapBridge>().get_keycaps();
+            let km = current_keymap.borrow();
+            let k = keys.borrow();
+            if !km.is_empty() {
+                crate::models::update_keycap_labels(&keycaps, &k, &km, &new_layout);
+            }
+
+            let all_keys = crate::models::build_key_entries_with_layout(&new_layout);
+            w.global::<crate::KeySelectorBridge>().set_all_keys(slint::ModelRc::from(all_keys.clone()));
+            crate::models::populate_key_categories(&w, &all_keys, "");
+        }
+    });
 }
 
 // --- OTA: browse ---

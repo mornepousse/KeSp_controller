@@ -8,18 +8,20 @@ use slint::{ComponentHandle, Model, SharedString};
 use std::rc::Rc;
 
 pub fn setup(window: &MainWindow, ctx: &AppContext) {
-    setup_filter(window);
+    setup_filter(window, ctx);
     let apply_keycode = build_apply_keycode(window, ctx);
     let refresh_macro_display = crate::macros::make_refresh_display(window, ctx);
     let dispatch_keycode = build_dispatch_keycode(window, ctx, apply_keycode, refresh_macro_display);
     setup_callbacks(window, dispatch_keycode);
 }
 
-fn setup_filter(window: &MainWindow) {
-    let all_keys = models::build_key_entries();
+fn setup_filter(window: &MainWindow, ctx: &AppContext) {
+    let keyboard_layout = ctx.keyboard_layout.clone();
     let window_weak = window.as_weak();
     window.global::<KeySelectorBridge>().on_apply_filter(move |search| {
         if let Some(w) = window_weak.upgrade() {
+            let layout = *keyboard_layout.borrow();
+            let all_keys = models::build_key_entries_with_layout(&layout);
             models::populate_key_categories(&w, &all_keys, &search);
         }
     });
