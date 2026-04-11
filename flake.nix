@@ -10,16 +10,16 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "2.0.4";
+        version = "2.0.7";
 
         assets = {
           x86_64-linux = {
             url = "https://github.com/mornepousse/KeSp_controller/releases/download/v${version}/KeSp_controller-linux-x86_64";
-            hash = "sha256-bMmmD/+fEo8iPpK9g5x2Nau82P4Jp1LoB8JUTmIHVEA=";
+            hash = "sha256-wqHPPhVpK9g0RqV9pMnZ+Buy1khMS+a5jZp0x9UAbGU=";
           };
           aarch64-darwin = {
             url = "https://github.com/mornepousse/KeSp_controller/releases/download/v${version}/KeSp_controller-macos-arm64";
-            hash = "sha256-pTQ5ecbs/uJPXmlnHFFvW1H/UKdLpZ2zWrovJo1HFAQ=";
+            hash = "sha256-C5u3COlm/JXVMmt7mDl76JfuDCidm1dGh8/lIh03UGc=";
           };
         };
 
