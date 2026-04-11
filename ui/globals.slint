@@ -123,6 +123,19 @@ export struct BigramData {
     total: int,
 }
 
+export struct TamaData {
+    loaded: bool,
+    enabled: bool,
+    level: int,
+    hunger: int,
+    happiness: int,
+    energy: int,
+    health: int,
+    xp: int,
+    total-keys: int,
+    max-kpm: int,
+}
+
 export global StatsBridge {
     in property <HandBalanceData> hand-balance;
     in property <[FingerLoadData]> finger-load;
@@ -131,6 +144,7 @@ export global StatsBridge {
     in property <[string]> dead-keys;
     in property <int> total-presses;
     in property <BigramData> bigrams;
+    in property <TamaData> tama;
     callback refresh-stats();
 }
 

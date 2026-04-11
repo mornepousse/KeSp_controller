@@ -5,7 +5,7 @@ use crate::{
     AdvancedBridge, AppState, BigramData, ComboData, ConnectionState, FingerLoadData,
     FlasherBridge, HandBalanceData, KeyOverrideData, KeymapBridge, LayoutBridge, LeaderData,
     MacroBridge, MacroData, MainWindow, RowUsageData, SettingsBridge, StatsBridge,
-    TapDanceAction, TapDanceData, ToolsBridge, TopKeyData, LayerInfo,
+    TamaData, TapDanceAction, TapDanceData, ToolsBridge, TopKeyData, LayerInfo,
 };
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::rc::Rc;
@@ -307,6 +307,20 @@ fn handle_msg(
         }
         BgMsg::TamaStatus(lines) => {
             window.global::<AdvancedBridge>().set_tama_status(SharedString::from(lines.join("\n")));
+        }
+        BgMsg::TamaStats(t) => {
+            window.global::<StatsBridge>().set_tama(TamaData {
+                loaded: true,
+                enabled: t.enabled,
+                level: t.level as i32,
+                hunger: t.hunger as i32,
+                happiness: t.happiness as i32,
+                energy: t.energy as i32,
+                health: t.health as i32,
+                xp: t.xp as i32,
+                total_keys: t.total_keys as i32,
+                max_kpm: t.max_kpm as i32,
+            });
         }
         BgMsg::AutoshiftStatus(text) => {
             window.global::<AdvancedBridge>().set_autoshift_status(SharedString::from(text));

@@ -1,7 +1,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
-import { StatsBridge, AppState, ConnectionState } from "../globals.slint";
+import { StatsBridge, AppState, ConnectionState, TamaData } from "../globals.slint";
 
 component BarChart inherits Rectangle {
     in property <float> value; // 0-100
@@ -283,6 +283,83 @@ export component TabStats inherits Rectangle {
                                 font-size: 11px;
                                 vertical-alignment: center;
                                 horizontal-alignment: right;
+                            }
+                        }
+                    }
+                }
+
+                // Tamagotchi
+                if StatsBridge.tama.loaded : Rectangle {
+                    background: Theme.bg-secondary;
+                    border-radius: 8px;
+                    vertical-stretch: 0;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Tamagotchi";
+                                color: Theme.accent-cyan;
+                                font-size: 13px;
+                                font-weight: 600;
+                            }
+                            Text {
+                                text: StatsBridge.tama.enabled ? "ON" : "OFF";
+                                color: StatsBridge.tama.enabled ? Theme.accent-green : Theme.fg-secondary;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 16px;
+                            // xp_needed = 500 + level * 250
+                            property <int> xp-needed: 500 + StatsBridge.tama.level * 250;
+                            property <float> xp-pct: xp-needed > 0 ? StatsBridge.tama.xp / xp-needed * 100 : 0;
+
+                            VerticalLayout {
+                                spacing: 4px;
+
+                                Text { text: "Level " + StatsBridge.tama.level; color: Theme.accent-yellow; font-size: 12px; font-weight: 600; }
+
+                                // XP progress bar
+                                Rectangle {
+                                    height: 16px;
+                                    background: Theme.bg-primary;
+                                    border-radius: 3px;
+
+                                    Rectangle {
+                                        x: 0;
+                                        width: parent.width * clamp(xp-pct / 100, 0, 1);
+                                        height: 100%;
+                                        background: Theme.accent-yellow;
+                                        border-radius: 3px;
+                                    }
+
+                                    Text {
+                                        text: StatsBridge.tama.xp + " / " + xp-needed + " XP";
+                                        color: Theme.fg-primary;
+                                        font-size: 9px;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text { text: "Keys: " + StatsBridge.tama.total-keys; color: Theme.fg-secondary; font-size: 10px; }
+                                Text { text: "Max KPM: " + StatsBridge.tama.max-kpm; color: Theme.fg-secondary; font-size: 10px; }
+                            }
+
+                            VerticalLayout {
+                                spacing: 4px;
+                                horizontal-stretch: 1;
+
+                                BarChart { label: "Hunger"; value: StatsBridge.tama.hunger / 10; bar-color: Theme.accent-orange; }
+                                BarChart { label: "Happy"; value: StatsBridge.tama.happiness / 10; bar-color: Theme.accent-green; }
+                                BarChart { label: "Energy"; value: StatsBridge.tama.energy / 10; bar-color: Theme.accent-cyan; }
+                                BarChart { label: "Health"; value: StatsBridge.tama.health / 10; bar-color: Theme.accent-red; }
                             }
                         }
                     }
