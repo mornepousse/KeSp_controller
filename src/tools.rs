@@ -11,6 +11,70 @@ static MATRIX_POLLING: AtomicBool = AtomicBool::new(false);
 
 pub fn setup(window: &MainWindow, ctx: &AppContext) {
     setup_toggle_matrix_test(window, ctx);
+    setup_nvs_reset(window, ctx);
+    setup_nvs_reset_all(window, ctx);
+}
+
+fn build_nvs_mask(window: &MainWindow) -> u8 {
+    let tb = window.global::<ToolsBridge>();
+    let mut mask: u8 = 0;
+    if tb.get_nvs_keymaps()   { mask |= 0x01; }
+    if tb.get_nvs_macros()    { mask |= 0x02; }
+    if tb.get_nvs_stats()     { mask |= 0x04; }
+    if tb.get_nvs_features()  { mask |= 0x08; }
+    if tb.get_nvs_bluetooth() { mask |= 0x10; }
+    if tb.get_nvs_tama()      { mask |= 0x20; }
+    mask
+}
+
+fn setup_nvs_reset(window: &MainWindow, ctx: &AppContext) {
+    let window_weak = window.as_weak();
+    let serial = ctx.serial.clone();
+    let tx = ctx.bg_tx.clone();
+
+    window.global::<ToolsBridge>().on_nvs_reset(move || {
+        let Some(w) = window_weak.upgrade() else { return };
+        let mask = build_nvs_mask(&w);
+        if mask == 0 { return; }
+        let serial = serial.clone();
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+            match ser.send_binary(bp::cmd::NVS_RESET, &[mask]) {
+                Ok(_) => {
+                    ser.disconnect();
+                    let _ = tx.send(BgMsg::Disconnected);
+                    let _ = tx.send(BgMsg::NvsResetDone(Ok(mask)));
+                }
+                Err(e) => {
+                    let _ = tx.send(BgMsg::NvsResetDone(Err(e)));
+                }
+            }
+        });
+    });
+}
+
+fn setup_nvs_reset_all(window: &MainWindow, ctx: &AppContext) {
+    let serial = ctx.serial.clone();
+    let tx = ctx.bg_tx.clone();
+
+    window.global::<ToolsBridge>().on_nvs_reset_all(move || {
+        let serial = serial.clone();
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+            match ser.send_binary(bp::cmd::NVS_RESET, &[0xFF]) {
+                Ok(_) => {
+                    ser.disconnect();
+                    let _ = tx.send(BgMsg::Disconnected);
+                    let _ = tx.send(BgMsg::NvsResetDone(Ok(0xFF)));
+                }
+                Err(e) => {
+                    let _ = tx.send(BgMsg::NvsResetDone(Err(e)));
+                }
+            }
+        });
+    });
 }
 
 fn setup_toggle_matrix_test(window: &MainWindow, ctx: &AppContext) {

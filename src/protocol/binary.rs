@@ -80,6 +80,7 @@ pub mod cmd {
 
     // Diagnostics
     pub const MATRIX_TEST: u8 = 0xB0;
+    pub const NVS_RESET: u8 = 0xB1;
 
     // OTA
     pub const OTA_START: u8 = 0xF0;

@@ -300,6 +300,16 @@ export global ToolsBridge {
     in property <length> matrix-content-width: 860px;
     in property <length> matrix-content-height: 360px;
     callback toggle-matrix-test();
+    // NVS Reset
+    in-out property <bool> nvs-keymaps: false;
+    in-out property <bool> nvs-macros: false;
+    in-out property <bool> nvs-stats: false;
+    in-out property <bool> nvs-features: false;
+    in-out property <bool> nvs-bluetooth: false;
+    in-out property <bool> nvs-tama: false;
+    in property <string> nvs-status: "";
+    callback nvs-reset();
+    callback nvs-reset-all();
 }
 
 // ---- Key Selector ----

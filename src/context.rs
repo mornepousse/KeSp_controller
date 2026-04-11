@@ -52,6 +52,7 @@ pub enum BgMsg {
     MatrixTestToggled(bool, u8, u8), // enabled, rows, cols
     MatrixTestEvent(u8, u8, u8),     // row, col, state (1=pressed, 0=released)
     MatrixTestError(String),
+    NvsResetDone(Result<u8, String>), // Ok(mask) or Err
 }
 
 /// Spawn a background thread that locks the serial port and runs `f`.

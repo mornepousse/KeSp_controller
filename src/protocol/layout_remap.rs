@@ -100,48 +100,51 @@ pub fn remap_key_label(layout: &KeyboardLayout, hid_name: &str) -> Option<&'stat
         KeyboardLayout::Qwerty => None,
 
         KeyboardLayout::Azerty => match key {
-            "COMMA" | "COMM" | "COMA" => Some(";"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some(","),
-            "PERIOD" | "DOT" => Some(":"),
-            "SLASH" | "SLSH" | "/" => Some("!"),
-            "M" => Some(","),
-            "W" => Some("Z"),
-            "Z" => Some("W"),
             "Q" => Some("A"),
+            "W" => Some("Z"),
             "A" => Some("Q"),
-            "," => Some(";"),
-            "." => Some(":"),
-            ";" => Some("M"),
+            "Z" => Some("W"),
+            "M" => Some(","),
+            "SEMICOLON" | "SCOLON" | "SCLN" | ";" => Some("M"),
+            "COMMA" | "COMM" | "COMA" | "," => Some(";"),
+            "PERIOD" | "DOT" | "." => Some(":"),
+            "SLASH" | "SLSH" | "/" => Some("!"),
             "-" | "MINUS" | "MIN" => Some(")"),
+            "=" | "EQUAL" | "EQL" => Some("+"),
             "BRACKET_LEFT" | "LBRCKT" | "LBRC" | "[" => Some("^"),
             "BRACKET_RIGHT" | "RBRCKT" | "RBRC" | "]" => Some("$"),
-            "BACKSLASH" | "BSLSH" | "\\" => Some("<"),
+            "BACKSLASH" | "BSLSH" | "\\" => Some("*"),
             "APOSTROPHE" | "APO" | "QUOT" | "'" => Some("\u{00f9}"), // ù
+            "`" | "GRAVE" | "GRV" => Some("\u{00b2}"),               // ²
+            "EUROPE2" | "ISO <>" => Some("<>"),
+            "EUROPE1" | "ISO #~" => Some("*\u{00b5}"),  // * µ
             "1" => Some("& 1"),
-            "2" => Some("\u{00e9} 2 ~"),    // é 2 ~
-            "3" => Some("\" 3 #"),
-            "4" => Some("' 4 }"),
-            "5" => Some("( 5 ["),
-            "6" => Some("- 6 |"),
-            "7" => Some("\u{00e8} 7 `"),     // è 7 `
-            "8" => Some("_ 8 \\"),
-            "9" => Some("\u{00e7} 9 ^"),     // ç 9 ^
-            "0" => Some("\u{00e0} 0 @"),     // à 0 @
+            "2" => Some("\u{00e9} 2"),       // é 2
+            "3" => Some("\" 3"),
+            "4" => Some("' 4"),
+            "5" => Some("( 5"),
+            "6" => Some("- 6"),
+            "7" => Some("\u{00e8} 7"),        // è 7
+            "8" => Some("_ 8"),
+            "9" => Some("\u{00e7} 9"),        // ç 9
+            "0" => Some("\u{00e0} 0"),        // à 0
             _ => None,
         },
 
         KeyboardLayout::Qwertz => match key {
             "Y" => Some("Z"),
             "Z" => Some("Y"),
-            "MINUS" | "MIN" => Some("\u{00df}"),                  // ß
-            "EQUAL" | "EQL" => Some("'"),
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{00fc}"), // ü
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("+"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f6}"),    // ö
-            "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00e4}"),      // ä
-            "GRAVE" | "GRV" => Some("^"),
-            "SLASH" | "SLSH" => Some("-"),
-            "BACKSLASH" | "BSLSH" => Some("#"),
+            "-" | "MINUS" | "MIN" => Some("\u{00df}"),                  // ß
+            "=" | "EQUAL" | "EQL" => Some("\u{00b4}"),                  // ´
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{00fc}"), // ü
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("+"),
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f6}"),    // ö
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00e4}"),      // ä
+            "`" | "GRAVE" | "GRV" => Some("^"),
+            "/" | "SLASH" | "SLSH" => Some("-"),
+            "\\" | "BACKSLASH" | "BSLSH" => Some("#"),
+            "ISO #~" | "EUROPE1" => Some("#"),
+            "ISO <>" | "EUROPE2" => Some("<>"),
             _ => None,
         },
 
@@ -156,7 +159,6 @@ pub fn remap_key_label(layout: &KeyboardLayout, hid_name: &str) -> Option<&'stat
             "I" => Some("C"),
             "O" => Some("R"),
             "P" => Some("L"),
-            "A" => Some("A"),
             "S" => Some("O"),
             "D" => Some("E"),
             "F" => Some("U"),
@@ -165,22 +167,21 @@ pub fn remap_key_label(layout: &KeyboardLayout, hid_name: &str) -> Option<&'stat
             "J" => Some("H"),
             "K" => Some("T"),
             "L" => Some("N"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("S"),
-            "APOSTROPHE" | "APO" | "QUOT" => Some("-"),
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("S"),
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("-"),
             "Z" => Some(";"),
             "X" => Some("Q"),
             "C" => Some("J"),
             "V" => Some("K"),
             "B" => Some("X"),
             "N" => Some("B"),
-            "M" => Some("M"),
-            "COMMA" | "COMM" | "COMA" => Some("W"),
-            "PERIOD" | "DOT" => Some("V"),
-            "SLASH" | "SLSH" => Some("Z"),
-            "MINUS" | "MIN" => Some("["),
-            "EQUAL" | "EQL" => Some("]"),
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("/"),
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("="),
+            "," | "COMMA" | "COMM" | "COMA" => Some("W"),
+            "." | "PERIOD" | "DOT" => Some("V"),
+            "/" | "SLASH" | "SLSH" => Some("Z"),
+            "-" | "MINUS" | "MIN" => Some("["),
+            "=" | "EQUAL" | "EQL" => Some("]"),
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("/"),
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("="),
             _ => None,
         },
 
@@ -200,23 +201,22 @@ pub fn remap_key_label(layout: &KeyboardLayout, hid_name: &str) -> Option<&'stat
             "J" => Some("N"),
             "K" => Some("E"),
             "L" => Some("I"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("O"),
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("O"),
             "N" => Some("K"),
             _ => None,
         },
 
         KeyboardLayout::Bepo => match key {
             "Q" => Some("B"),
-            "W" => Some("E"),
+            "W" => Some("\u{00e9}"),  // é
             "E" => Some("P"),
             "R" => Some("O"),
-            "T" => Some("E"),
+            "T" => Some("\u{00e8}"),  // è
             "Y" => Some("^"),
             "U" => Some("V"),
             "I" => Some("D"),
             "O" => Some("L"),
             "P" => Some("J"),
-            "A" => Some("A"),
             "S" => Some("U"),
             "D" => Some("I"),
             "F" => Some("E"),
@@ -225,20 +225,28 @@ pub fn remap_key_label(layout: &KeyboardLayout, hid_name: &str) -> Option<&'stat
             "J" => Some("T"),
             "K" => Some("S"),
             "L" => Some("R"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("N"),
-            "Z" => Some("A"),
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("N"),
+            "Z" => Some("\u{00e0}"),  // à
             "X" => Some("Y"),
             "C" => Some("X"),
             "V" => Some("."),
             "B" => Some("K"),
             "N" => Some("'"),
             "M" => Some("Q"),
-            "COMMA" | "COMM" | "COMA" => Some("G"),
-            "PERIOD" | "DOT" => Some("H"),
-            "SLASH" | "SLSH" => Some("F"),
+            "," | "COMMA" | "COMM" | "COMA" => Some("G"),
+            "." | "PERIOD" | "DOT" => Some("H"),
+            "/" | "SLASH" | "SLSH" => Some("F"),
+            "-" | "MINUS" | "MIN" => Some("="),
+            "=" | "EQUAL" | "EQL" => Some("%"),
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("-"),
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("+"),
+            "\\" | "BACKSLASH" | "BSLSH" => Some("*"),
+            "`" | "GRAVE" | "GRV" => Some("$"),
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("M"),
+            "ISO <>" | "EUROPE2" => Some("\u{00ea}\u{00f9}"), // êù
             "1" => Some("\""),
-            "2" => Some("<"),
-            "3" => Some(">"),
+            "2" => Some("\u{00ab}"),  // «
+            "3" => Some("\u{00bb}"),  // »
             "4" => Some("("),
             "5" => Some(")"),
             "6" => Some("@"),
@@ -250,89 +258,97 @@ pub fn remap_key_label(layout: &KeyboardLayout, hid_name: &str) -> Option<&'stat
         },
 
         KeyboardLayout::QwertyEs => match key {
-            "MINUS" | "MIN" => Some("'"),
-            "EQUAL" | "EQL" => Some("\u{00a1}"),                     // ¡
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("`"),
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("+"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f1}"),    // ñ
-            "APOSTROPHE" | "APO" | "QUOT" => Some("'"),
-            "GRAVE" | "GRV" => Some("\u{00ba}"),                     // º
-            "SLASH" | "SLSH" => Some("-"),
-            "BACKSLASH" | "BSLSH" => Some("\u{00e7}"),               // ç
+            "-" | "MINUS" | "MIN" => Some("'"),
+            "=" | "EQUAL" | "EQL" => Some("\u{00a1}"),                     // ¡
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("`"),
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("+"),
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f1}"),    // ñ
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00b4}"),      // ´
+            "`" | "GRAVE" | "GRV" => Some("\u{00ba}"),                     // º
+            "/" | "SLASH" | "SLSH" => Some("-"),
+            "\\" | "BACKSLASH" | "BSLSH" => Some("\u{00e7}"),             // ç
+            "ISO #~" | "EUROPE1" => Some("}"),
+            "ISO <>" | "EUROPE2" => Some("<>"),
             _ => None,
         },
 
         KeyboardLayout::QwertyPt => match key {
-            "MINUS" | "MIN" => Some("'"),
-            "EQUAL" | "EQL" => Some("\u{00ab}"),                     // «
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("+"),
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("'"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00e7}"),    // ç
-            "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00ba}"),      // º
-            "GRAVE" | "GRV" => Some("\\"),
-            "SLASH" | "SLSH" => Some("-"),
-            "BACKSLASH" | "BSLSH" => Some("~"),
+            "-" | "MINUS" | "MIN" => Some("'"),
+            "=" | "EQUAL" | "EQL" => Some("\u{00ab}"),                     // «
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("+"),
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("\u{00b4}"), // ´
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00e7}"),    // ç
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00ba}"),      // º
+            "`" | "GRAVE" | "GRV" => Some("\\"),
+            "/" | "SLASH" | "SLSH" => Some("-"),
+            "\\" | "BACKSLASH" | "BSLSH" => Some("~"),
+            "ISO #~" | "EUROPE1" => Some("]"),
+            "ISO <>" | "EUROPE2" => Some("<>"),
             _ => None,
         },
 
         KeyboardLayout::QwertyIt => match key {
-            "MINUS" | "MIN" => Some("'"),
-            "EQUAL" | "EQL" => Some("\u{00ec}"),                     // ì
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{00e8}"), // è
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("+"),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f2}"),    // ò
-            "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00e0}"),      // à
-            "GRAVE" | "GRV" => Some("\\"),
-            "SLASH" | "SLSH" => Some("-"),
-            "BACKSLASH" | "BSLSH" => Some("\u{00f9}"),              // ù
+            "-" | "MINUS" | "MIN" => Some("'"),
+            "=" | "EQUAL" | "EQL" => Some("\u{00ec}"),                     // ì
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{00e8}"), // è
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("+"),
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f2}"),    // ò
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00e0}"),      // à
+            "`" | "GRAVE" | "GRV" => Some("\\"),
+            "/" | "SLASH" | "SLSH" => Some("-"),
+            "\\" | "BACKSLASH" | "BSLSH" => Some("\u{00f9}"),              // ù
+            "ISO #~" | "EUROPE1" => Some("}"),
+            "ISO <>" | "EUROPE2" => Some("<>"),
             _ => None,
         },
 
         KeyboardLayout::QwertyNordic => match key {
-            "MINUS" | "MIN" => Some("+"),
-            "EQUAL" | "EQL" => Some("'"),
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{00e5}"), // å
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("\u{00a8}"), // ¨
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f6}"),    // ö
-            "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00e4}"),      // ä
-            "GRAVE" | "GRV" => Some("\u{00a7}"),                     // §
-            "SLASH" | "SLSH" => Some("-"),
-            "BACKSLASH" | "BSLSH" => Some("'"),
+            "-" | "MINUS" | "MIN" => Some("+"),
+            "=" | "EQUAL" | "EQL" => Some("\u{00b4}"),                     // ´
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{00e5}"), // å
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("\u{00a8}"), // ¨
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00f6}"),    // ö
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("\u{00e4}"),      // ä
+            "`" | "GRAVE" | "GRV" => Some("\u{00a7}"),                     // §
+            "/" | "SLASH" | "SLSH" => Some("-"),
+            "\\" | "BACKSLASH" | "BSLSH" => Some("'"),
+            "ISO #~" | "EUROPE1" => Some("'"),
+            "ISO <>" | "EUROPE2" => Some("<>"),
             _ => None,
         },
 
         KeyboardLayout::QwertyBr => match key {
-            "MINUS" | "MIN" => Some("-"),
-            "EQUAL" | "EQL" => Some("="),
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("'"),
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("["),
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00e7}"),    // ç
-            "APOSTROPHE" | "APO" | "QUOT" => Some("~"),
-            "GRAVE" | "GRV" => Some("'"),
-            "SLASH" | "SLSH" => Some(";"),
-            "BACKSLASH" | "BSLSH" => Some("]"),
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{00b4}"), // ´
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("["),
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{00e7}"),    // ç
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("~"),
+            "`" | "GRAVE" | "GRV" => Some("'"),
+            "/" | "SLASH" | "SLSH" => Some(";"),
+            "\\" | "BACKSLASH" | "BSLSH" => Some("]"),
+            "ISO #~" | "EUROPE1" => Some("}"),
+            "ISO <>" | "EUROPE2" => Some("<>"),
             _ => None,
         },
 
         KeyboardLayout::QwertyTr => match key {
-            "MINUS" | "MIN" => Some("*"),
-            "EQUAL" | "EQL" => Some("-"),
-            "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{011f}"), // ğ
-            "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("\u{00fc}"), // ü
-            "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{015f}"),    // ş
-            "APOSTROPHE" | "APO" | "QUOT" => Some("i"),
-            "GRAVE" | "GRV" => Some("\""),
-            "SLASH" | "SLSH" => Some("."),
-            "BACKSLASH" | "BSLSH" => Some(","),
+            "-" | "MINUS" | "MIN" => Some("*"),
+            "=" | "EQUAL" | "EQL" => Some("-"),
+            "[" | "BRACKET_LEFT" | "LBRCKT" | "LBRC" => Some("\u{011f}"), // ğ
+            "]" | "BRACKET_RIGHT" | "RBRCKT" | "RBRC" => Some("\u{00fc}"), // ü
+            ";" | "SEMICOLON" | "SCOLON" | "SCLN" => Some("\u{015f}"),    // ş
+            "'" | "APOSTROPHE" | "APO" | "QUOT" => Some("i"),
+            "`" | "GRAVE" | "GRV" => Some("\""),
+            "/" | "SLASH" | "SLSH" => Some("."),
+            "\\" | "BACKSLASH" | "BSLSH" => Some(","),
+            "ISO <>" | "EUROPE2" => Some("<>"),
             _ => None,
         },
 
         KeyboardLayout::QwertyUk => match key {
-            "GRAVE" | "GRV" => Some("`"),
-            "MINUS" | "MIN" => Some("-"),
-            "EQUAL" | "EQL" => Some("="),
-            "BACKSLASH" | "BSLSH" => Some("#"),
-            "APOSTROPHE" | "APO" | "QUOT" => Some("'"),
+            "`" | "GRAVE" | "GRV" => Some("\u{00ac}"),    // ¬
+            "\\" | "BACKSLASH" | "BSLSH" => Some("#"),
+            "ISO #~" | "EUROPE1" => Some("#~"),
+            "ISO <>" | "EUROPE2" => Some("\\"),
             _ => None,
         },
     }

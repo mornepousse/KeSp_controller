@@ -267,6 +267,73 @@ export component TabTools inherits Rectangle {
                 }
             }
 
+            // ===================== NVS RESET =====================
+            Rectangle {
+                background: Theme.bg-secondary;
+                border-radius: 8px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+
+                    Text {
+                        text: "NVS Reset";
+                        color: Theme.accent-cyan;
+                        font-size: 14px;
+                        font-weight: 600;
+                    }
+                    Text {
+                        text: "Erase saved configuration and reboot with defaults";
+                        color: Theme.fg-secondary;
+                        font-size: 11px;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 16px;
+
+                        VerticalLayout {
+                            spacing: 6px;
+                            DarkCheckbox { text: "Keymaps + Layers"; checked <=> ToolsBridge.nvs-keymaps; }
+                            DarkCheckbox { text: "Macros"; checked <=> ToolsBridge.nvs-macros; }
+                            DarkCheckbox { text: "Stats (keys + bigrams)"; checked <=> ToolsBridge.nvs-stats; }
+                        }
+                        VerticalLayout {
+                            spacing: 6px;
+                            DarkCheckbox { text: "TD / Combos / Leaders / KO"; checked <=> ToolsBridge.nvs-features; }
+                            DarkCheckbox { text: "Bluetooth"; checked <=> ToolsBridge.nvs-bluetooth; }
+                            DarkCheckbox { text: "Tamagotchi"; checked <=> ToolsBridge.nvs-tama; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        DarkButton {
+                            text: "Reset selected";
+                            enabled: AppState.connection == ConnectionState.connected
+                                && (ToolsBridge.nvs-keymaps || ToolsBridge.nvs-macros
+                                    || ToolsBridge.nvs-stats || ToolsBridge.nvs-features
+                                    || ToolsBridge.nvs-bluetooth || ToolsBridge.nvs-tama);
+                            clicked => { ToolsBridge.nvs-reset(); }
+                        }
+
+                        DarkButton {
+                            text: "Factory reset";
+                            enabled: AppState.connection == ConnectionState.connected;
+                            clicked => { ToolsBridge.nvs-reset-all(); }
+                        }
+
+                        Text {
+                            text: ToolsBridge.nvs-status;
+                            color: Theme.fg-secondary;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                }
+            }
+
             // ===================== ESP32 FLASHER =====================
             Rectangle {
                 background: Theme.bg-secondary;

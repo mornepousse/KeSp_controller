@@ -192,6 +192,15 @@ fn setup_ota_start(window: &MainWindow, ctx: &AppContext) {
     });
 }
 
+fn read_config_mask(w: &MainWindow) -> u8 {
+    let tb = w.global::<crate::ToolsBridge>();
+    let mut mask: u8 = 0;
+    if tb.get_nvs_keymaps()  { mask |= 0x01; }
+    if tb.get_nvs_macros()   { mask |= 0x02; }
+    if tb.get_nvs_features() { mask |= 0x08; }
+    mask // 0 = all
+}
+
 // --- Config Export ---
 fn setup_config_export(window: &MainWindow, ctx: &AppContext) {
     let serial = ctx.serial.clone();
@@ -200,6 +209,7 @@ fn setup_config_export(window: &MainWindow, ctx: &AppContext) {
 
     window.global::<SettingsBridge>().on_config_export(move || {
         let Some(w) = window_weak.upgrade() else { return };
+        let mask = read_config_mask(&w);
         w.global::<SettingsBridge>().set_config_busy(true);
         w.global::<SettingsBridge>().set_config_progress(0.0);
         w.global::<SettingsBridge>().set_config_status(SharedString::from("Reading config..."));
@@ -207,7 +217,7 @@ fn setup_config_export(window: &MainWindow, ctx: &AppContext) {
         let serial = serial.clone();
         let tx = tx.clone();
         std::thread::spawn(move || {
-            let result = config::export_config(&serial, &tx);
+            let result = config::export_config(&serial, &tx, mask);
             let _ = tx.send(BgMsg::ConfigDone(result));
         });
     });
@@ -220,6 +230,8 @@ fn setup_config_import(window: &MainWindow, ctx: &AppContext) {
     let window_weak = window.as_weak();
 
     window.global::<SettingsBridge>().on_config_import(move || {
+        let Some(w) = window_weak.upgrade() else { return };
+        let mask = read_config_mask(&w);
         let serial = serial.clone();
         let tx = tx.clone();
         let window_weak = window_weak.clone();
@@ -256,7 +268,7 @@ fn setup_config_import(window: &MainWindow, ctx: &AppContext) {
                 }
             };
 
-            let result = config::import_config(&serial, &tx, &config);
+            let result = config::import_config(&serial, &tx, &config, mask);
             let _ = tx.send(BgMsg::ConfigDone(result));
         });
     });

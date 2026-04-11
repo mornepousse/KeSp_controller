@@ -403,6 +403,18 @@ fn handle_msg(
             tb.set_matrix_test_active(false);
             tb.set_matrix_test_status(SharedString::from(format!("Error: {}", e)));
         }
+        BgMsg::NvsResetDone(result) => {
+            let tb = window.global::<ToolsBridge>();
+            match result {
+                Ok(mask) => {
+                    let what = if mask == 0xFF { "Factory reset".into() } else { format!("Reset (0x{:02X})", mask) };
+                    tb.set_nvs_status(SharedString::from(format!("{} done — keyboard rebooting", what)));
+                }
+                Err(e) => {
+                    tb.set_nvs_status(SharedString::from(format!("Error: {}", e)));
+                }
+            }
+        }
         BgMsg::MacroList(macros) => {
             let model: Vec<MacroData> = macros.iter().map(|m| {
                 let steps_str: Vec<String> = m.steps.iter().map(|s| {

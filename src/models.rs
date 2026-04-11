@@ -137,6 +137,8 @@ pub fn build_key_entries_with_layout(layout: &layout_remap::KeyboardLayout) -> R
         code: 0x39,
         category: SharedString::from("Control"),
     });
+    entries.push(hid_entry(0x32, "Symbol")); // Europe1 / ISO #~ (*µ on AZERTY)
+    entries.push(hid_entry(0x64, "Symbol")); // Europe2 / ISO <> (<> on AZERTY)
     for code in 0x53u16..=0x63 { entries.push(hid_entry(code, "Keypad")); }
     for code in 0x68u16..=0x73 { entries.push(hid_entry(code, "Function")); }
     for code in [0x7Fu16, 0x80, 0x81] { entries.push(hid_entry(code, "Media")); }

@@ -1,6 +1,7 @@
 import { Theme } from "../theme.slint";
 import { DarkButton } from "../components/dark_button.slint";
-import { SettingsBridge, AppState, ConnectionState } from "../globals.slint";
+import { DarkCheckbox } from "../components/dark_checkbox.slint";
+import { SettingsBridge, ToolsBridge, AppState, ConnectionState } from "../globals.slint";
 
 export component TabSettings inherits Rectangle {
     background: Theme.bg-primary;
@@ -102,13 +103,27 @@ export component TabSettings inherits Rectangle {
                 spacing: 10px;
 
                 Text { text: "Configuration Backup"; color: Theme.accent-cyan; font-size: 14px; font-weight: 600; }
-                Text { text: "Export or import your full keyboard configuration (keymaps, macros, combos, etc.)"; color: Theme.fg-secondary; font-size: 11px; }
+                Text { text: "Export or import keyboard config — check categories or leave all unchecked for full backup"; color: Theme.fg-secondary; font-size: 11px; }
+
+                HorizontalLayout {
+                    spacing: 16px;
+
+                    VerticalLayout {
+                        spacing: 6px;
+                        DarkCheckbox { text: "Keymaps + Layers"; checked <=> ToolsBridge.nvs-keymaps; }
+                        DarkCheckbox { text: "Macros"; checked <=> ToolsBridge.nvs-macros; }
+                    }
+                    VerticalLayout {
+                        spacing: 6px;
+                        DarkCheckbox { text: "TD / Combos / Leaders / KO"; checked <=> ToolsBridge.nvs-features; }
+                    }
+                }
 
                 HorizontalLayout {
                     spacing: 12px;
 
                     DarkButton {
-                        text: SettingsBridge.config-busy ? "Working..." : "Export Config";
+                        text: SettingsBridge.config-busy ? "Working..." : "Export";
                         primary: true;
                         enabled: !SettingsBridge.config-busy
                             && AppState.connection == ConnectionState.connected;
@@ -116,7 +131,7 @@ export component TabSettings inherits Rectangle {
                     }
 
                     DarkButton {
-                        text: SettingsBridge.config-busy ? "Working..." : "Import Config";
+                        text: SettingsBridge.config-busy ? "Working..." : "Import";
                         enabled: !SettingsBridge.config-busy
                             && AppState.connection == ConnectionState.connected;
                         clicked => { SettingsBridge.config-import(); }
