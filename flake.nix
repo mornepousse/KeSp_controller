@@ -31,10 +31,10 @@
           udev
           stdenv.cc.cc.lib
         ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
-          xorg.libX11
-          xorg.libXcursor
-          xorg.libXrandr
-          xorg.libXi
+          libX11
+          libXcursor
+          libXrandr
+          libXi
         ];
       in
       {
