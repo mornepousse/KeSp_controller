@@ -11,6 +11,12 @@ component SectionHeader inherits Text {
     font-weight: 600;
 }
 
+component SectionDesc inherits Text {
+    color: Theme.fg-primary;
+    font-size: 12px;
+    wrap: word-wrap;
+}
+
 component ItemRow inherits Rectangle {
     in property <string> prefix;
     in property <string> left;
@@ -88,6 +94,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 4px;
                         SectionHeader { text: "Tap Dance"; }
+                        SectionDesc { text: "One key, multiple actions: tap once, twice, three times, or hold. Useful for shift+key, layer toggles, etc."; }
                         if AdvancedBridge.tap-dances.length == 0 : Text { text: "No tap dances"; color: Theme.fg-secondary; font-size: 11px; }
 
                         Text { text: "1-tap  2-tap  3-tap  hold"; color: Theme.fg-secondary; font-size: 10px; }
@@ -126,6 +133,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 4px;
                         SectionHeader { text: "Key Overrides"; }
+                        SectionDesc { text: "Replace a key (with optional modifiers) by another. Example: Shift+1 outputs ! by default; remap to send something else."; }
                         if AdvancedBridge.key-overrides.length == 0 : Text { text: "No key overrides"; color: Theme.fg-secondary; font-size: 11px; }
                         for ko in AdvancedBridge.key-overrides : ItemRow {
                             prefix: "KO" + ko.index;
@@ -178,6 +186,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 6px;
                         SectionHeader { text: "Autoshift"; }
+                        SectionDesc { text: "Hold a key to send its shifted version. No more reaching for Shift — works on letters, numbers, and symbols."; }
                         HorizontalLayout {
                             spacing: 8px;
                             Text { text: AdvancedBridge.autoshift-status != "" ? AdvancedBridge.autoshift-status : "Unknown"; color: Theme.fg-primary; font-size: 11px; vertical-alignment: center; }
@@ -200,6 +209,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 4px;
                         SectionHeader { text: "Combos"; }
+                        SectionDesc { text: "Press two keys together to send a third. Useful for accessing keys without reaching: e.g. press F+J at the same time = Esc."; }
                         if AdvancedBridge.combos.length == 0 : Text { text: "No combos"; color: Theme.fg-secondary; font-size: 11px; }
                         for combo in AdvancedBridge.combos : ItemRow {
                             prefix: "#" + combo.index;
@@ -247,6 +257,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 4px;
                         SectionHeader { text: "Leader Keys"; }
+                        SectionDesc { text: "Press a Leader key, then a sequence of keys to trigger an action. Vim-style command shortcuts on your keyboard."; }
                         if AdvancedBridge.leaders.length == 0 : Text { text: "No leader keys"; color: Theme.fg-secondary; font-size: 11px; }
                         for leader in AdvancedBridge.leaders : ItemRow {
                             prefix: "#" + leader.index;
@@ -317,6 +328,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 8px;
                         SectionHeader { text: "Tri-Layer"; }
+                        SectionDesc { text: "When layers L1 and L2 are both active, automatically activate L3. Classic combo for accessing a third layer via two thumb keys."; }
                         HorizontalLayout {
                             spacing: 8px;
                             alignment: start;
@@ -339,6 +351,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 4px;
                         SectionHeader { text: "Bluetooth"; }
+                        SectionDesc { text: "Pair with up to 3 devices and switch between them. Use BT keycodes (Next/Prev/Pair) on your keymap to control."; }
                         Text { text: AdvancedBridge.bt-status; color: Theme.fg-primary; font-size: 11px; }
                     }
                 }
@@ -351,6 +364,7 @@ export component TabAdvanced inherits Rectangle {
                         padding: 12px;
                         spacing: 6px;
                         SectionHeader { text: "Tamagotchi"; }
+                        SectionDesc { text: "A virtual pet that lives in your keyboard. It gains XP as you type, gets hungry, and needs care. Detailed stats in the Stats tab."; }
                         Text { text: AdvancedBridge.tama-status; color: Theme.fg-primary; font-size: 11px; wrap: word-wrap; }
                         HorizontalLayout {
                             spacing: 4px;
