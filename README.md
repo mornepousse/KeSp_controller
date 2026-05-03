@@ -25,7 +25,7 @@ Built with [Rust](https://www.rust-lang.org/) and [Slint](https://slint.dev/) UI
 
 ## Download
 
-Pre-built binaries for Linux, Windows, and macOS are available on the [Releases](https://github.com/mornepousse/KeSp_controller/releases) page.
+Pre-built binaries for Linux and Windows are available on the [GitLab Releases](https://gitlab.com/harrael/KeSp_controller/-/releases) page.
 
 ## Build from source
 
