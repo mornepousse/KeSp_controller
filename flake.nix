@@ -10,7 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "2.0.8";
+        version = "2.0.9";
 
         # Binaries are hosted on GitLab generic package registry.
         # URL format: https://gitlab.com/api/v4/projects/<project>/packages/generic/kesp-controller/<version>/<file>
@@ -19,7 +19,7 @@
         assets = {
           x86_64-linux = {
             url = "${gitlabPkg}/v${version}/KeSp_controller-linux-x86_64";
-            hash = "sha256-exWjl8klOa638LmwSTgPY8ic6heeqA++akvgfnq7RMw=";
+            hash = "sha256-Ga9BCwY04glRkoKNYGBOIgOuNfFRQcxzXxBoWfg074M=";
           };
         };
 
