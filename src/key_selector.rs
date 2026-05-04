@@ -222,9 +222,24 @@ fn setup_callbacks(window: &MainWindow, dispatch_keycode: Rc<dyn Fn(u16)>) {
                 _ => 0x02,
             };
             let hid: u16 = match key_idx {
-                0..=25 => 0x04 + key_idx as u16,
-                26..=35 => 0x1E + (key_idx - 26) as u16,
-                36 => 0x2C, 37 => 0x28, 38 => 0x29, 39 => 0x2B, 40 => 0x2A,
+                0..=25 => 0x04 + key_idx as u16,                    // A-Z
+                26..=35 => 0x1E + (key_idx - 26) as u16,            // 1-0
+                36 => 0x2C,  // Space
+                37 => 0x28,  // Enter
+                38 => 0x29,  // Esc
+                39 => 0x2B,  // Tab
+                40 => 0x2A,  // Bksp
+                41 => 0x2D,  // -
+                42 => 0x2E,  // =
+                43 => 0x2F,  // [
+                44 => 0x30,  // ]
+                45 => 0x31,  // backslash
+                46 => 0x33,  // ;
+                47 => 0x34,  // '
+                48 => 0x35,  // `
+                49 => 0x36,  // ,
+                50 => 0x37,  // .
+                51 => 0x38,  // /
                 _ => 0x04,
             };
             let code = 0x5000 | (mod_nibble << 8) | hid;
