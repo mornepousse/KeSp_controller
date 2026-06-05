@@ -44,6 +44,8 @@ fn main() {
         heatmap_data: Rc::new(std::cell::RefCell::new(Vec::new())),
         macro_steps: Rc::new(std::cell::RefCell::new(Vec::new())),
         is_dongle: Rc::new(std::cell::Cell::new(false)),
+        layout_edit: Rc::new(std::cell::RefCell::new(Vec::new())),
+        layout_sel: Rc::new(std::cell::Cell::new(-1)),
     };
 
     connection::auto_connect(&window, &ctx);

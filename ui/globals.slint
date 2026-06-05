@@ -339,10 +339,23 @@ export global LayoutBridge {
     in property <string> json-text: "";
     in-out property <string> file-path: "";
     in-out property <bool> auto-refresh: false;
+    // --- Editor state ---
+    in property <int> selected-index: -1;   // -1 = none selected
+    // Selected-key fields are two-way strings so the edit fields refresh on
+    // selection change (a one-way binding is dropped after the first edit).
+    in-out property <string> sel-x;          // units
+    in-out property <string> sel-y;          // units
+    in-out property <string> sel-rotation;   // degrees
+    in-out property <string> sel-row;
+    in-out property <string> sel-col;
     callback load-from-file();
     callback load-from-keyboard();
     callback load-json(string);
     callback export-json();
+    callback select-key(int);
+    callback update-key(string /* field */, string /* value */);
+    callback add-key();
+    callback delete-key();
 }
 
 // ---- Matrix Test ----

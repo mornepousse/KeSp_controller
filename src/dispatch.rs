@@ -19,6 +19,8 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
     let keyboard_layout = ctx.keyboard_layout.clone();
     let heatmap_data = ctx.heatmap_data.clone();
     let is_dongle = ctx.is_dongle.clone();
+    let layout_edit = ctx.layout_edit.clone();
+    let layout_sel = ctx.layout_sel.clone();
 
     let timer = slint::Timer::default();
     timer.start(
@@ -31,7 +33,7 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
                 handle_msg(
                     &window, msg,
                     &keys_arc, &current_keymap, &keyboard_layout, &heatmap_data,
-                    &is_dongle,
+                    &is_dongle, &layout_edit, &layout_sel,
                 );
             }
         },
@@ -69,6 +71,8 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
     let layout_timer = slint::Timer::default();
     {
         let window_weak3 = window.as_weak();
+        let layout_edit = ctx.layout_edit.clone();
+        let layout_sel = ctx.layout_sel.clone();
         layout_timer.start(
             slint::TimerMode::Repeated,
             std::time::Duration::from_secs(5),
@@ -79,7 +83,7 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
                 let path = lb.get_file_path().to_string();
                 if path.is_empty() { return; }
                 if let Ok(json) = std::fs::read_to_string(&path) {
-                    models::populate_layout_preview(&w, &json);
+                    models::populate_layout_preview(&w, &json, &layout_edit, &layout_sel);
                 }
             },
         );
@@ -133,6 +137,8 @@ fn handle_msg(
     keyboard_layout: &Rc<std::cell::RefCell<protocol::layout_remap::KeyboardLayout>>,
     heatmap_data: &Rc<std::cell::RefCell<Vec<Vec<u32>>>>,
     is_dongle: &Rc<std::cell::Cell<bool>>,
+    layout_edit: &Rc<std::cell::RefCell<Vec<crate::protocol::layout::KeycapPos>>>,
+    layout_sel: &Rc<std::cell::Cell<i32>>,
 ) {
     match msg {
         BgMsg::Connected(port, fw, names, km) => {
@@ -179,6 +185,9 @@ fn handle_msg(
             app.set_connection(ConnectionState::Disconnected);
             app.set_firmware_version(SharedString::default());
             app.set_status_text("Disconnected".into());
+        }
+        BgMsg::LayoutPreview(json) => {
+            models::populate_layout_preview(window, &json, layout_edit, layout_sel);
         }
         BgMsg::LayoutJson(new_keys) => {
             *keys_arc.borrow_mut() = new_keys.clone();

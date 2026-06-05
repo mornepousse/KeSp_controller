@@ -22,6 +22,10 @@ pub struct AppContext {
     pub macro_steps: Rc<RefCell<Vec<(u8, u8)>>>,
     // Dongle role flag (set from FEATURES tag at connect time, mirrored to AppState).
     pub is_dongle: Rc<Cell<bool>>,
+    // Layout Preview editor: editable buffer + selected key index (-1 = none).
+    // Independent from `keys` so editing a layout never disturbs the keymap tab.
+    pub layout_edit: Rc<RefCell<Vec<KeycapPos>>>,
+    pub layout_sel: Rc<Cell<i32>>,
 }
 
 /// Messages sent from background serial threads to the UI event loop.
@@ -36,6 +40,8 @@ pub enum BgMsg {
     HeatmapData(Vec<Vec<u32>>, u32), // counts, max
     BigramLines(Vec<String>),
     LayoutJson(Vec<KeycapPos>),
+    /// Raw layout JSON for the Tools > Layout Preview editor (success path only).
+    LayoutPreview(String),
     MacroList(Vec<parsers::MacroEntry>),
     TdList(Vec<[u16; 4]>),
     ComboList(Vec<parsers::ComboEntry>),

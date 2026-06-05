@@ -240,33 +240,62 @@ pub fn populate_key_categories(window: &MainWindow, all_keys: &VecModel<KeyEntry
     ks.set_cat_td_macro(set(filter("TDMacro")));
 }
 
-pub fn populate_layout_preview(window: &MainWindow, json: &str) {
+/// Parse `json` into the editable buffer and render the Layout Preview.
+/// Resets the selection. The JSON panel shows the (re)serialized buffer, so
+/// what is exported always matches what is displayed.
+pub fn populate_layout_preview(
+    window: &MainWindow,
+    json: &str,
+    buffer: &Rc<std::cell::RefCell<Vec<KeycapPos>>>,
+    sel: &Rc<std::cell::Cell<i32>>,
+) {
     let lb = window.global::<LayoutBridge>();
     match protocol::layout::parse_json(json) {
         Ok(keys) => {
-            let keycaps: Vec<KeycapData> = keys.iter().enumerate().map(|(idx, kp)| KeycapData {
-                x: kp.x, y: kp.y, w: kp.w, h: kp.h,
-                rotation: kp.angle,
-                rotation_cx: kp.w / 2.0, rotation_cy: kp.h / 2.0,
-                label: SharedString::from(format!("R{}C{}", kp.row, kp.col)),
-                sublabel: SharedString::default(),
-                keycode: 0, color: slint::Color::from_argb_u8(255, 0x44, 0x47, 0x5a),
-                heat: 0.0, selected: false, index: idx as i32,
-            }).collect();
-            let max_x = keys.iter().map(|k| k.x + k.w).fold(0.0f32, f32::max);
-            let max_y = keys.iter().map(|k| k.y + k.h).fold(0.0f32, f32::max);
-            lb.set_content_width(max_x + 20.0);
-            lb.set_content_height(max_y + 20.0);
-            lb.set_keycaps(ModelRc::from(std::rc::Rc::new(VecModel::from(keycaps))));
             lb.set_status(SharedString::from(format!("{} keys loaded", keys.len())));
-            let pretty_json = serde_json::from_str::<serde_json::Value>(json)
-                .and_then(|v| serde_json::to_string_pretty(&v))
-                .unwrap_or_else(|_| json.to_string());
-            lb.set_json_text(SharedString::from(pretty_json));
+            *buffer.borrow_mut() = keys;
+            sel.set(-1);
+            rebuild_layout_model(window, &buffer.borrow(), -1);
         }
         Err(e) => {
             lb.set_status(SharedString::from(format!("Parse error: {}", e)));
             lb.set_json_text(SharedString::from(json));
         }
     }
+}
+
+/// Rebuild the LayoutBridge render model, JSON text, and selected-key fields
+/// from the editable buffer. `selected` is the index to highlight (-1 = none).
+pub fn rebuild_layout_model(window: &MainWindow, keys: &[KeycapPos], selected: i32) {
+    use protocol::layout::UNIT_PX;
+    let lb = window.global::<LayoutBridge>();
+    let keycaps: Vec<KeycapData> = keys.iter().enumerate().map(|(idx, kp)| KeycapData {
+        x: kp.x, y: kp.y, w: kp.w, h: kp.h,
+        rotation: kp.angle,
+        rotation_cx: kp.w / 2.0, rotation_cy: kp.h / 2.0,
+        label: SharedString::from(format!("R{}C{}", kp.row, kp.col)),
+        sublabel: SharedString::default(),
+        keycode: 0, color: slint::Color::from_argb_u8(255, 0x44, 0x47, 0x5a),
+        heat: 0.0, selected: idx as i32 == selected, index: idx as i32,
+    }).collect();
+    let max_x = keys.iter().map(|k| k.x + k.w).fold(0.0f32, f32::max);
+    let max_y = keys.iter().map(|k| k.y + k.h).fold(0.0f32, f32::max);
+    lb.set_content_width(max_x + 20.0);
+    lb.set_content_height(max_y + 20.0);
+    lb.set_keycaps(ModelRc::from(Rc::new(VecModel::from(keycaps))));
+    lb.set_json_text(SharedString::from(protocol::layout::serialize_json(keys)));
+    lb.set_selected_index(selected);
+    if let Some(k) = (selected >= 0).then(|| keys.get(selected as usize)).flatten() {
+        lb.set_sel_x(SharedString::from(fmt_unit(k.x / UNIT_PX)));
+        lb.set_sel_y(SharedString::from(fmt_unit(k.y / UNIT_PX)));
+        lb.set_sel_rotation(SharedString::from(fmt_unit(k.angle)));
+        lb.set_sel_row(SharedString::from(k.row.to_string()));
+        lb.set_sel_col(SharedString::from(k.col.to_string()));
+    }
+}
+
+/// Format a unit value with at most 2 decimals and no trailing zeros
+/// (e.g. 1.5 -> "1.5", 2.0 -> "2", 1.25 -> "1.25").
+fn fmt_unit(v: f32) -> String {
+    format!("{}", (v * 100.0).round() / 100.0)
 }

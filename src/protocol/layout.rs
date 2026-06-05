@@ -12,7 +12,7 @@ pub struct KeycapPos {
     pub angle: f32, // degrees
 }
 
-const UNIT_PX: f32 = 50.0; // 1u = 50 pixels
+pub const UNIT_PX: f32 = 50.0; // 1u = 50 pixels
 
 #[derive(Deserialize)]
 struct LayoutJson {
@@ -95,6 +95,35 @@ pub fn parse_json(json: &str) -> Result<Vec<KeycapPos>, String> {
         return Err("No keys found in layout".into());
     }
     Ok(out)
+}
+
+/// Serialize absolute key positions back into a flat layout JSON.
+///
+/// Positions are converted from pixels back to keyboard units (px / UNIT_PX).
+/// Any `groups` structure from the source is flattened away: every key becomes
+/// a top-level entry with absolute coordinates and its combined angle.
+pub fn serialize_json(keys: &[KeycapPos]) -> String {
+    let entries: Vec<serde_json::Value> = keys
+        .iter()
+        .map(|k| {
+            serde_json::json!({
+                "row": k.row,
+                "col": k.col,
+                "x": round2(k.x / UNIT_PX),
+                "y": round2(k.y / UNIT_PX),
+                "w": round2(k.w / UNIT_PX),
+                "h": round2(k.h / UNIT_PX),
+                "r": round2(k.angle),
+            })
+        })
+        .collect();
+    let doc = serde_json::json!({ "keys": entries });
+    serde_json::to_string_pretty(&doc).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Round to 2 decimals to keep the exported JSON tidy.
+fn round2(v: f32) -> f32 {
+    (v * 100.0).round() / 100.0
 }
 
 /// Default layout embedded at compile time.
