@@ -22,11 +22,6 @@ export struct LayerInfo {
     active: bool,
 }
 
-export struct PortInfo {
-    name: string,
-    path: string,
-}
-
 export enum ConnectionState { disconnected, connecting, connected }
 export enum ActiveTab { keymap, advanced, macros, stats, settings }
 
@@ -34,6 +29,7 @@ export enum ActiveTab { keymap, advanced, macros, stats, settings }
 export global AppState {
     in-out property <ConnectionState> connection: ConnectionState.disconnected;
     in-out property <ActiveTab> active-tab: ActiveTab.keymap;
+    in-out property <bool> is-dongle: false;
     callback tab-changed(int);
     in-out property <string> status-text: "Disconnected";
     in-out property <bool> spinner-visible: false;
@@ -41,9 +37,55 @@ export global AppState {
     in-out property <int> wpm: 0;
 }
 
+// =============================================================================
+// Dongle Bridge
+// =============================================================================
+
+// Live RF link status for one half — derived from RF_STATUS (0xB3).
+export struct LinkSideData {
+    up: bool,
+    sig: int,           // 0..255 rf_signal_q255 (0 = down)
+    bars: int,          // 0..4 from signal_bars()
+    hb-age-ms: int,
+    pkt-rx: int,
+    pkt-dup: int,
+}
+
+// Battery snapshot for one half — derived from BATTERY (0xB6).
+export struct BatterySideData {
+    has-value: bool,    // false → render "—"
+    is-stale: bool,     // age > 60 s
+    volt-x10: int,      // batt_dv (volts × 10)
+    soc-pct: int,
+    charging: bool,
+    age-ms: int,
+}
+
+export global DongleBridge {
+    // Link status (poll 1–2 Hz)
+    in property <LinkSideData> link-left;
+    in property <LinkSideData> link-right;
+
+    // Battery (poll 0.1–0.2 Hz)
+    in property <BatterySideData> batt-left;
+    in property <BatterySideData> batt-right;
+
+    // Pairing — paired_count + MACs from RF_PAIR_LIST (0xB4)
+    in property <int> paired-count;
+    in property <string> mac-left;          // "AA:BB:..." or "—"
+    in property <string> mac-right;
+    in-out property <bool> pair-active;     // true during 30 s window
+    in-out property <int> pair-countdown-s; // ticks down 30 → 0
+    in property <string> pair-status;       // last user-visible line
+
+    callback start-pair();
+    callback reset-pair();
+    callback refresh-all();
+}
+
 export global ConnectionBridge {
-    in property <[PortInfo]> ports;
-    in-out property <string> selected-port: "";
+    in property <[string]> port-labels;       // dropdown entries, e.g. "KaSe Dongle (/dev/ttyACM1)"
+    in-out property <int> selected-index: 0;  // index into port-labels chosen by the user
     callback connect();
     callback disconnect();
     callback refresh-ports();

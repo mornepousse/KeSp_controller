@@ -86,6 +86,13 @@ pub mod cmd {
     pub const OTA_START: u8 = 0xF0;
     pub const OTA_DATA: u8 = 0xF1;
     pub const OTA_ABORT: u8 = 0xF2;
+
+    // Dongle / wireless (0xB2–0xB6, dongle role only — ERR_UNKNOWN on standalone)
+    pub const RF_PAIR_START: u8 = 0xB2;
+    pub const RF_STATUS: u8 = 0xB3;
+    pub const RF_PAIR_LIST: u8 = 0xB4;
+    pub const RF_PAIR_RESET: u8 = 0xB5;
+    pub const BATTERY: u8 = 0xB6;
 }
 
 #[allow(dead_code)]
@@ -97,6 +104,7 @@ pub mod status {
     pub const ERR_RANGE: u8 = 0x04;
     pub const ERR_BUSY: u8 = 0x05;
     pub const ERR_OVERFLOW: u8 = 0x06;
+    pub const ERR_LINK_DOWN: u8 = 0x07;
 }
 
 /// CRC-8/MAXIM (polynomial 0x31, init 0x00)
@@ -219,6 +227,11 @@ pub fn set_layout_name_payload(layer: u8, name: &str) -> Vec<u8> {
 /// Build SETKEY payload: [layer:u8][row:u8][col:u8][value:u16 LE]
 pub fn setkey_payload(layer: u8, row: u8, col: u8, keycode: u16) -> Vec<u8> {
     vec![layer, row, col, (keycode & 0xFF) as u8, (keycode >> 8) as u8]
+}
+
+/// Build RF_PAIR_START (0xB2) payload: `[reset:u8]` (0 = add to existing, 1 = wipe NVS first).
+pub fn rf_pair_start_payload(reset: bool) -> Vec<u8> {
+    vec![if reset { 1 } else { 0 }]
 }
 
 /// Parsed KR response.

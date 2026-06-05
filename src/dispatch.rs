@@ -2,10 +2,10 @@ use crate::context::{AppContext, BgMsg};
 use crate::protocol::{self as protocol, keycode};
 use crate::models;
 use crate::{
-    AdvancedBridge, AppState, BigramData, ComboData, ConnectionState, FingerLoadData,
-    FlasherBridge, HandBalanceData, KeyOverrideData, KeymapBridge, LayoutBridge, LeaderData,
-    MacroBridge, MacroData, MainWindow, RowUsageData, SettingsBridge, StatsBridge,
-    TamaData, TapDanceAction, TapDanceData, ToolsBridge, TopKeyData, LayerInfo,
+    AdvancedBridge, AppState, BatterySideData, BigramData, ComboData, ConnectionState, DongleBridge,
+    FingerLoadData, FlasherBridge, HandBalanceData, KeyOverrideData, KeymapBridge, LayoutBridge,
+    LeaderData, LinkSideData, MacroBridge, MacroData, MainWindow, RowUsageData, SettingsBridge,
+    StatsBridge, TamaData, TapDanceAction, TapDanceData, ToolsBridge, TopKeyData, LayerInfo,
 };
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::rc::Rc;
@@ -18,6 +18,7 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
     let current_keymap = ctx.current_keymap.clone();
     let keyboard_layout = ctx.keyboard_layout.clone();
     let heatmap_data = ctx.heatmap_data.clone();
+    let is_dongle = ctx.is_dongle.clone();
 
     let timer = slint::Timer::default();
     timer.start(
@@ -27,7 +28,11 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
             let Some(window) = window_weak.upgrade() else { return };
 
             while let Ok(msg) = bg_rx.try_recv() {
-                handle_msg(&window, msg, &keys_arc, &current_keymap, &keyboard_layout, &heatmap_data);
+                handle_msg(
+                    &window, msg,
+                    &keys_arc, &current_keymap, &keyboard_layout, &heatmap_data,
+                    &is_dongle,
+                );
             }
         },
     );
@@ -80,9 +85,43 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
         );
     }
 
+    // Dongle polling timer (1 Hz for RF_STATUS, 1/5 Hz for BATTERY + PAIR_LIST).
+    // Per CDC_DONGLE_INTEGRATION.md §3 the spec recommends 1–2 Hz for RF_STATUS
+    // and 5–10 s for BATTERY — both are idempotent and effectively free.
+    let dongle_timer = slint::Timer::default();
+    {
+        let serial = ctx.serial.clone();
+        let tx = ctx.bg_tx.clone();
+        let window_weak4 = window.as_weak();
+        let tick = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        dongle_timer.start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_secs(1),
+            move || {
+                let Some(w) = window_weak4.upgrade() else { return };
+                if w.global::<AppState>().get_connection() != ConnectionState::Connected { return; }
+                if !w.global::<AppState>().get_is_dongle() { return; }
+                let n = tick.get();
+                tick.set(n.wrapping_add(1));
+                let do_slow = n % 5 == 0;
+                let serial = serial.clone();
+                let tx = tx.clone();
+                std::thread::spawn(move || {
+                    let Ok(mut ser) = serial.try_lock() else { return };
+                    crate::dongle::fetch_rf_status(&mut ser, &tx);
+                    if do_slow {
+                        crate::dongle::fetch_battery(&mut ser, &tx);
+                        crate::dongle::fetch_pair_list(&mut ser, &tx);
+                    }
+                });
+            },
+        );
+    }
+
     let _keep_timer = timer;
     let _keep_wpm = wpm_timer;
     let _keep_layout = layout_timer;
+    let _keep_dongle = dongle_timer;
     window.run().unwrap();
 }
 
@@ -93,6 +132,7 @@ fn handle_msg(
     current_keymap: &Rc<std::cell::RefCell<Vec<Vec<u16>>>>,
     keyboard_layout: &Rc<std::cell::RefCell<protocol::layout_remap::KeyboardLayout>>,
     heatmap_data: &Rc<std::cell::RefCell<Vec<Vec<u32>>>>,
+    is_dongle: &Rc<std::cell::Cell<bool>>,
 ) {
     match msg {
         BgMsg::Connected(port, fw, names, km) => {
@@ -448,6 +488,84 @@ fn handle_msg(
             if next_slot > mb.get_new_slot_idx() {
                 mb.set_new_slot_idx(next_slot);
             }
+        }
+        // Dongle / wireless messages (per CDC_DONGLE_INTEGRATION.md)
+        BgMsg::RfModeChanged(dongle_mode) => {
+            window.global::<AppState>().set_is_dongle(dongle_mode);
+            is_dongle.set(dongle_mode);
+        }
+        BgMsg::RfStatus(s) => {
+            let make_side = |up: bool, sig: u8, hb_ms: u32, rx: u32, dup: u32| LinkSideData {
+                up,
+                sig: sig as i32,
+                bars: protocol::parsers::signal_bars(sig) as i32,
+                hb_age_ms: hb_ms.min(i32::MAX as u32) as i32,
+                pkt_rx: rx.min(i32::MAX as u32) as i32,
+                pkt_dup: dup.min(i32::MAX as u32) as i32,
+            };
+            let d = window.global::<DongleBridge>();
+            d.set_link_left(make_side(
+                s.link_left, s.sig_left, s.hb_age_left_ms, s.pkt_rx_left, s.pkt_dup_left,
+            ));
+            d.set_link_right(make_side(
+                s.link_right, s.sig_right, s.hb_age_right_ms, s.pkt_rx_right, s.pkt_dup_right,
+            ));
+        }
+        BgMsg::RfPairList(list) => {
+            let format_mac = |mac: &[u8; 6], present: bool| -> SharedString {
+                if !present {
+                    SharedString::from("—")
+                } else {
+                    SharedString::from(format!(
+                        "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+                    ))
+                }
+            };
+            let d = window.global::<DongleBridge>();
+            d.set_paired_count(list.paired_count as i32);
+            d.set_mac_left(format_mac(&list.mac_left, list.left_paired()));
+            d.set_mac_right(format_mac(&list.mac_right, list.right_paired()));
+        }
+        BgMsg::Battery(b) => {
+            let make_side = |s: protocol::parsers::HalfBattery| BatterySideData {
+                has_value: s.has_value(),
+                is_stale: s.is_stale(),
+                volt_x10: s.batt_dv as i32,
+                soc_pct: s.soc_pct as i32,
+                charging: s.charging == 1,
+                age_ms: s.age_ms.min(i32::MAX as u32) as i32,
+            };
+            let d = window.global::<DongleBridge>();
+            d.set_batt_left(make_side(b.left));
+            d.set_batt_right(make_side(b.right));
+        }
+        BgMsg::PairTick(remaining_s) => {
+            let d = window.global::<DongleBridge>();
+            d.set_pair_active(true);
+            d.set_pair_countdown_s(remaining_s as i32);
+        }
+        BgMsg::PairResult(result) => {
+            let d = window.global::<DongleBridge>();
+            d.set_pair_active(false);
+            d.set_pair_countdown_s(0);
+            match result {
+                Ok(count) => {
+                    d.set_pair_status(SharedString::from(format!(
+                        "Half paired ✓ (total: {})",
+                        count
+                    )));
+                }
+                Err(e) => {
+                    d.set_pair_status(SharedString::from(e));
+                }
+            }
+        }
+        BgMsg::StatusMessage(msg) => {
+            window.global::<AppState>().set_status_text(SharedString::from(msg));
+        }
+        BgMsg::StatusError(err) => {
+            window.global::<AppState>().set_status_text(SharedString::from(format!("Error: {}", err)));
         }
     }
 }

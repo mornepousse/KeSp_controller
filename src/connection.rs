@@ -1,10 +1,64 @@
 use crate::context::{AppContext, BgMsg};
 use crate::protocol;
+use crate::protocol::serial::SerialManager;
 use crate::{AppState, ConnectionBridge, ConnectionState, MainWindow};
-use slint::ComponentHandle;
+use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use std::rc::Rc;
+use std::sync::mpsc;
+
+/// Connect to `port` (or auto-detect when `None`) and load the device state.
+///
+/// Both the wired keyboard and the wireless dongle expose the same command set
+/// (keymap, layers, layout, stats…), so the load path is identical; only the USB
+/// identity tells them apart (`SerialManager::is_dongle`).
+fn connect_and_load(ser: &mut SerialManager, tx: &mpsc::Sender<BgMsg>, port: Option<String>) {
+    let result = match port {
+        Some(p) => ser.connect(&p).map(|_| p),
+        None => ser.auto_connect(),
+    };
+    match result {
+        Ok(port_name) => {
+            let fw = ser.get_firmware_version().unwrap_or_default();
+            let _ = tx.send(BgMsg::RfModeChanged(ser.is_dongle));
+
+            let names = ser.get_layer_names().unwrap_or_default();
+            let km = ser.get_keymap(0).unwrap_or_default();
+            let _ = tx.send(BgMsg::Connected(port_name, fw, names, km));
+
+            match ser.get_layout_json() {
+                Ok(json) => match protocol::layout::parse_json(&json) {
+                    Ok(keys) => {
+                        let _ = tx.send(BgMsg::LayoutJson(keys));
+                    }
+                    Err(e) => eprintln!("Layout parse error: {}", e),
+                },
+                Err(e) => eprintln!("get_layout_json error: {}", e),
+            }
+        }
+        Err(e) => {
+            let _ = tx.send(BgMsg::ConnectError(e));
+        }
+    }
+}
+
+/// Populate the connection dropdown with the KaSe-family ports currently present.
+fn refresh_port_list(window: &MainWindow) {
+    let ports = SerialManager::list_kase_ports();
+    let labels: Vec<SharedString> = ports
+        .iter()
+        .map(|(_, label, _)| SharedString::from(label))
+        .collect();
+    let cb = window.global::<ConnectionBridge>();
+    if cb.get_selected_index() as usize >= labels.len() {
+        cb.set_selected_index(0);
+    }
+    cb.set_port_labels(ModelRc::from(Rc::new(VecModel::from(labels))));
+}
 
 /// Auto-connect to the keyboard on startup.
 pub fn auto_connect(window: &MainWindow, ctx: &AppContext) {
+    refresh_port_list(window);
+
     let serial = ctx.serial.clone();
     let tx = ctx.bg_tx.clone();
     window.global::<AppState>().set_status_text("Scanning ports...".into());
@@ -12,64 +66,34 @@ pub fn auto_connect(window: &MainWindow, ctx: &AppContext) {
 
     std::thread::spawn(move || {
         let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-        match ser.auto_connect() {
-            Ok(port_name) => {
-                let fw = ser.get_firmware_version().unwrap_or_default();
-                let names = ser.get_layer_names().unwrap_or_default();
-                let km = ser.get_keymap(0).unwrap_or_default();
-                let _ = tx.send(BgMsg::Connected(port_name, fw, names, km));
-                // Fetch physical layout from firmware
-                match ser.get_layout_json() {
-                    Ok(json) => {
-                        match protocol::layout::parse_json(&json) {
-                            Ok(keys) => { let _ = tx.send(BgMsg::LayoutJson(keys)); }
-                            Err(e) => eprintln!("Layout parse error: {}", e),
-                        }
-                    }
-                    Err(e) => eprintln!("get_layout_json error: {}", e),
-                }
-            }
-            Err(e) => {
-                let _ = tx.send(BgMsg::ConnectError(e));
-            }
-        }
+        connect_and_load(&mut ser, &tx, None);
     });
 }
 
 /// Wire up Connect, Disconnect, refresh_ports, and tab-change auto-refresh.
 pub fn setup(window: &MainWindow, ctx: &AppContext) {
-    // --- Connect callback ---
+    // --- Connect callback (connects to the port selected in the dropdown) ---
     {
         let serial_c = ctx.serial.clone();
         let tx_c = ctx.bg_tx.clone();
         let window_weak = window.as_weak();
         window.global::<ConnectionBridge>().on_connect(move || {
-            if let Some(w) = window_weak.upgrade() {
-                w.global::<AppState>().set_status_text("Scanning ports...".into());
-                w.global::<AppState>().set_connection(ConnectionState::Connecting);
-            }
+            let Some(w) = window_weak.upgrade() else { return };
+            w.global::<AppState>().set_status_text("Connecting...".into());
+            w.global::<AppState>().set_connection(ConnectionState::Connecting);
+
+            // Resolve the chosen port; fall back to auto-detect if none/out of range.
+            let idx = w.global::<ConnectionBridge>().get_selected_index() as usize;
+            let port = SerialManager::list_kase_ports()
+                .into_iter()
+                .nth(idx)
+                .map(|(path, _, _)| path);
+
             let serial = serial_c.clone();
             let tx = tx_c.clone();
             std::thread::spawn(move || {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
-                match ser.auto_connect() {
-                    Ok(port_name) => {
-                        let fw = ser.get_firmware_version().unwrap_or_default();
-                        let names = ser.get_layer_names().unwrap_or_default();
-                        let km = ser.get_keymap(0).unwrap_or_default();
-                        let _ = tx.send(BgMsg::Connected(port_name, fw, names, km));
-                        match ser.get_layout_json() {
-                            Ok(json) => {
-                                match protocol::layout::parse_json(&json) {
-                                    Ok(keys) => { let _ = tx.send(BgMsg::LayoutJson(keys)); }
-                                    Err(e) => eprintln!("Layout parse error: {}", e),
-                                }
-                            }
-                            Err(e) => eprintln!("get_layout_json error: {}", e),
-                        }
-                    }
-                    Err(e) => { let _ = tx.send(BgMsg::ConnectError(e)); }
-                }
+                connect_and_load(&mut ser, &tx, port);
             });
         });
     }
@@ -85,7 +109,14 @@ pub fn setup(window: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    window.global::<ConnectionBridge>().on_refresh_ports(|| {});
+    // --- Refresh ports callback ---
+    {
+        let window_weak = window.as_weak();
+        window.global::<ConnectionBridge>().on_refresh_ports(move || {
+            let Some(w) = window_weak.upgrade() else { return };
+            refresh_port_list(&w);
+        });
+    }
 
     // --- Auto-refresh on tab change ---
     {
@@ -146,6 +177,16 @@ pub fn setup(window: &MainWindow, ctx: &AppContext) {
                             String::from_utf8_lossy(&r.payload).lines().map(|l| l.to_string()).collect()
                         } else { Vec::new() };
                         let _ = tx.send(BgMsg::BigramLines(bigram_lines));
+                    });
+                }
+                6 => {
+                    // Dongle: refresh RF status, pair list, and battery (silent if not a dongle).
+                    if !w.global::<AppState>().get_is_dongle() { return; }
+                    std::thread::spawn(move || {
+                        let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
+                        crate::dongle::fetch_rf_status(&mut ser, &tx);
+                        crate::dongle::fetch_pair_list(&mut ser, &tx);
+                        crate::dongle::fetch_battery(&mut ser, &tx);
                     });
                 }
                 _ => {}

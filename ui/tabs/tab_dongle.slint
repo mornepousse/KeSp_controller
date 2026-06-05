@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: GPL-3.0
+import { Theme } from "../theme.slint";
+import { DongleBridge, LinkSideData, BatterySideData } from "../globals.slint";
+import { DarkButton } from "../components/dark_button.slint";
+
+// Four-bar signal indicator, lit-up based on `bars` (0..4).
+component SignalBars inherits HorizontalLayout {
+    in property <int> bars;
+    spacing: 2px;
+    for i in 4 : Rectangle {
+        width: 4px;
+        height: 4px + i * 2px;
+        y: parent.height - self.height;
+        border-radius: 1px;
+        background: i < bars ? Theme.accent-green : Theme.bg-primary;
+    }
+}
+
+// Card for one half's RF link state.
+component LinkCard inherits VerticalLayout {
+    in property <string> title;
+    in property <LinkSideData> link;
+    spacing: 4px;
+
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        Text { text: title; font-weight: 700; font-size: 14px; }
+        Rectangle {
+            width: 10px; height: 10px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 5px;
+            background: link.up ? Theme.accent-green : Theme.accent-red;
+        }
+        Text {
+            text: link.up ? "up" : "down";
+            color: Theme.fg-secondary;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        SignalBars { bars: link.bars; }
+    }
+    Text { text: "Signal: " + link.sig + "/255 (" + link.bars + " bars)"; font-size: 12px; color: Theme.fg-secondary; }
+    Text { text: "Heartbeat: " + (link.hb-age-ms / 1000) + " s ago"; font-size: 12px; color: Theme.fg-secondary; }
+    Text { text: "RX: " + link.pkt-rx + "  ·  dup: " + link.pkt-dup; font-size: 12px; color: Theme.fg-secondary; }
+}
+
+// Card for one half's battery state.
+component BatteryCard inherits VerticalLayout {
+    in property <string> title;
+    in property <BatterySideData> batt;
+    spacing: 4px;
+
+    Text { text: title; font-weight: 700; font-size: 14px; }
+    Text {
+        text: !batt.has-value ? "—"
+            : (batt.charging ? "⚡ " : "") + batt.soc-pct + "%"
+                + (batt.is-stale ? " (?)" : "");
+        font-size: 18px;
+        color: batt.is-stale ? Theme.fg-secondary : Theme.fg-primary;
+    }
+    Text {
+        text: !batt.has-value ? "no telemetry yet"
+            : (batt.volt-x10 / 10.0) + " V";
+        font-size: 12px;
+        color: Theme.fg-secondary;
+    }
+    Text {
+        text: !batt.has-value ? ""
+            : "age: " + (batt.age-ms / 1000) + " s";
+        font-size: 11px;
+        color: Theme.fg-secondary;
+    }
+}
+
+export component TabDongle inherits Rectangle {
+    VerticalLayout {
+        spacing: 14px;
+        padding: 16px;
+
+        // === Header ===
+        HorizontalLayout {
+            spacing: 12px;
+            Text { text: "Dongle"; font-size: 18px; font-weight: 700; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            DarkButton {
+                text: "Refresh All";
+                clicked => { DongleBridge.refresh-all(); }
+            }
+        }
+
+        // === RF link status ===
+        Rectangle {
+            background: Theme.bg-secondary;
+            border-radius: 6px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
+                Text { text: "RF Link"; font-weight: 600; font-size: 13px; color: Theme.fg-secondary; }
+                HorizontalLayout {
+                    spacing: 24px;
+                    LinkCard { title: "Left half"; link: DongleBridge.link-left; horizontal-stretch: 1; }
+                    Rectangle { width: 1px; background: Theme.bg-primary; }
+                    LinkCard { title: "Right half"; link: DongleBridge.link-right; horizontal-stretch: 1; }
+                }
+            }
+        }
+
+        // === Battery ===
+        Rectangle {
+            background: Theme.bg-secondary;
+            border-radius: 6px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
+                Text { text: "Battery"; font-weight: 600; font-size: 13px; color: Theme.fg-secondary; }
+                HorizontalLayout {
+                    spacing: 24px;
+                    BatteryCard { title: "Left"; batt: DongleBridge.batt-left; horizontal-stretch: 1; }
+                    Rectangle { width: 1px; background: Theme.bg-primary; }
+                    BatteryCard { title: "Right"; batt: DongleBridge.batt-right; horizontal-stretch: 1; }
+                }
+            }
+        }
+
+        // === Pairing ===
+        Rectangle {
+            background: Theme.bg-secondary;
+            border-radius: 6px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
+                Text { text: "Pairing"; font-weight: 600; font-size: 13px; color: Theme.fg-secondary; }
+
+                HorizontalLayout {
+                    spacing: 24px;
+                    VerticalLayout {
+                        spacing: 4px;
+                        horizontal-stretch: 1;
+                        Text { text: "Paired halves: " + DongleBridge.paired-count + " / 2"; font-size: 13px; }
+                        Text { text: "L: " + DongleBridge.mac-left; font-size: 12px; color: Theme.fg-secondary; }
+                        Text { text: "R: " + DongleBridge.mac-right; font-size: 12px; color: Theme.fg-secondary; }
+                    }
+                    VerticalLayout {
+                        spacing: 6px;
+                        DarkButton {
+                            text: DongleBridge.pair-active
+                                ? "Waiting… " + DongleBridge.pair-countdown-s + " s"
+                                : "Open pairing window (30 s)";
+                            enabled: !DongleBridge.pair-active;
+                            clicked => { DongleBridge.start-pair(); }
+                        }
+                        DarkButton {
+                            text: "Reset paired";
+                            enabled: !DongleBridge.pair-active;
+                            clicked => { DongleBridge.reset-pair(); }
+                        }
+                    }
+                }
+
+                if DongleBridge.pair-status != "" : Text {
+                    text: DongleBridge.pair-status;
+                    color: Theme.fg-secondary;
+                    font-size: 12px;
+                }
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }
+    }
+}

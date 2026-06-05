@@ -13,6 +13,7 @@ mod layout;
 mod connection;
 mod key_selector;
 mod tools;
+mod dongle;
 
 slint::include_modules!();
 
@@ -42,6 +43,7 @@ fn main() {
         )),
         heatmap_data: Rc::new(std::cell::RefCell::new(Vec::new())),
         macro_steps: Rc::new(std::cell::RefCell::new(Vec::new())),
+        is_dongle: Rc::new(std::cell::Cell::new(false)),
     };
 
     connection::auto_connect(&window, &ctx);
@@ -55,6 +57,7 @@ fn main() {
     flasher::setup(&window, &ctx);
     layout::setup(&window, &ctx);
     tools::setup(&window, &ctx);
+    dongle::setup(&window, &ctx);
 
     dispatch::run(&window, &ctx, bg_rx);
 }

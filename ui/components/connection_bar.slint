@@ -1,5 +1,6 @@
 import { Theme } from "../theme.slint";
 import { DarkButton } from "dark_button.slint";
+import { DarkComboBox } from "dark_combo_box.slint";
 import { AppState, ConnectionBridge, ConnectionState } from "../globals.slint";
 
 export component ConnectionBar inherits Rectangle {
@@ -21,11 +22,23 @@ export component ConnectionBar inherits Rectangle {
             }
         }
 
-        // Port selector (placeholder - ComboBox needs string model)
-        Text {
-            text: ConnectionBridge.selected-port != "" ? ConnectionBridge.selected-port : "No port selected";
-            color: Theme.fg-primary;
-            vertical-alignment: center;
+        // Port selector
+        VerticalLayout {
+            alignment: center;
+            DarkComboBox {
+                width: 240px;
+                model: ConnectionBridge.port-labels;
+                current-index <=> ConnectionBridge.selected-index;
+                current-value: ConnectionBridge.port-labels.length == 0 ? "No KaSe device found"
+                    : ConnectionBridge.port-labels[ConnectionBridge.selected-index];
+            }
+        }
+
+        // Refresh ports
+        DarkButton {
+            text: "⟳";
+            enabled: AppState.connection != ConnectionState.connected;
+            clicked => { ConnectionBridge.refresh-ports(); }
         }
 
         // Connect/Disconnect button

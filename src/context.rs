@@ -20,6 +20,8 @@ pub struct AppContext {
     pub keyboard_layout: Rc<RefCell<KeyboardLayout>>,
     pub heatmap_data: Rc<RefCell<Vec<Vec<u32>>>>,
     pub macro_steps: Rc<RefCell<Vec<(u8, u8)>>>,
+    // Dongle role flag (set from FEATURES tag at connect time, mirrored to AppState).
+    pub is_dongle: Rc<Cell<bool>>,
 }
 
 /// Messages sent from background serial threads to the UI event loop.
@@ -54,6 +56,15 @@ pub enum BgMsg {
     MatrixTestError(String),
     NvsResetDone(Result<u8, String>), // Ok(mask) or Err
     TamaStats(crate::stats::TamaStats),
+    // Dongle / wireless (RF_STATUS / RF_PAIR_LIST / BATTERY per CDC_DONGLE_INTEGRATION.md)
+    RfModeChanged(bool),                 // true = dongle detected (FEATURES tag RF_DONGLE)
+    RfStatus(parsers::RfStatus),
+    RfPairList(parsers::PairList),
+    Battery(parsers::Battery),
+    PairTick(u8),                        // seconds remaining in the 30 s pairing window
+    PairResult(Result<u8, String>),      // Ok(new paired_count) or Err(timeout/error)
+    StatusMessage(String),
+    StatusError(String),
 }
 
 /// Spawn a background thread that locks the serial port and runs `f`.

@@ -19,6 +19,7 @@ pub struct SerialManager {
     pub port_name: String,
     pub connected: bool,
     pub v2: bool, // true if firmware supports binary protocol v2
+    pub is_dongle: bool, // true if the connected device is the wireless dongle (by USB id)
 }
 
 impl SerialManager {
@@ -28,6 +29,7 @@ impl SerialManager {
             port_name: String::new(),
             connected: false,
             v2: false,
+            is_dongle: false,
         }
     }
 
@@ -65,6 +67,9 @@ impl SerialManager {
         self.port_name = port_name.to_string();
         self.connected = true;
         self.v2 = false;
+        // Initial guess from USB descriptor; overridden below by the canonical
+        // FEATURES tag check once we know the firmware is v2-capable.
+        self.is_dongle = Self::port_is_dongle(port_name);
 
         // Detect v2: try PING
         if let Some(p) = self.port.as_mut() {
@@ -75,6 +80,13 @@ impl SerialManager {
         let ping_result = self.send_binary(bp::cmd::PING, &[]);
         if ping_result.is_ok() {
             self.v2 = true;
+            // Canonical role detection per CDC_DONGLE_INTEGRATION.md §1:
+            // the firmware exposes its role via FEATURES tags. The `RF_DONGLE`
+            // tag is the official marker; absent = standalone keyboard.
+            if let Ok(resp) = self.send_binary(bp::cmd::FEATURES, &[]) {
+                let features = String::from_utf8_lossy(&resp.payload);
+                self.is_dongle = features.split(',').any(|tag| tag.trim() == "RF_DONGLE");
+            }
         }
 
         Ok(())
@@ -84,6 +96,51 @@ impl SerialManager {
         let port_name = Self::find_kase_port()?;
         self.connect(&port_name)?;
         Ok(port_name)
+    }
+
+    /// Custom USB VID for the wired keyboard ("KaSe V2 Debug"); the dongle uses
+    /// Espressif's native-USB VID with a "KaSe Dongle" product string.
+    const KEYBOARD_VID: u16 = 0xCAFE;
+    const ESPRESSIF_VID: u16 = 0x303A;
+
+    /// Classify a serial port as a KaSe-family device. Returns (label, is_dongle).
+    fn classify_kase_port(port: &serialport::SerialPortInfo) -> Option<(String, bool)> {
+        let serialport::SerialPortType::UsbPort(usb) = &port.port_type else {
+            return None;
+        };
+        let product = usb.product.clone().unwrap_or_default();
+        let is_kase_family = usb.vid == Self::KEYBOARD_VID
+            || product.contains("KaSe")
+            || product.contains("KeSp");
+        if !is_kase_family {
+            return None;
+        }
+        let is_dongle = product.contains("Dongle") || usb.vid == Self::ESPRESSIF_VID;
+        let kind = if is_dongle { "Dongle" } else { "Keyboard" };
+        Some((format!("KaSe {} ({})", kind, port.port_name), is_dongle))
+    }
+
+    /// List all connected KaSe-family ports as (path, label, is_dongle).
+    pub fn list_kase_ports() -> Vec<(String, String, bool)> {
+        let ports = serialport::available_ports().unwrap_or_default();
+        ports
+            .iter()
+            .filter_map(|p| {
+                Self::classify_kase_port(p)
+                    .map(|(label, is_dongle)| (p.port_name.clone(), label, is_dongle))
+            })
+            .collect()
+    }
+
+    /// Whether the given port belongs to a wireless dongle, by its USB descriptor.
+    pub fn port_is_dongle(port_name: &str) -> bool {
+        serialport::available_ports()
+            .unwrap_or_default()
+            .iter()
+            .find(|p| p.port_name == port_name)
+            .and_then(Self::classify_kase_port)
+            .map(|(_, is_dongle)| is_dongle)
+            .unwrap_or(false)
     }
 
     pub fn find_kase_port() -> Result<String, String> {
@@ -156,6 +213,7 @@ impl SerialManager {
         self.port_name.clear();
         self.connected = false;
         self.v2 = false;
+        self.is_dongle = false;
     }
 
     // ==================== LOW-LEVEL: ASCII LEGACY ====================

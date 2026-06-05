@@ -897,3 +897,134 @@ pub fn parse_keystats_binary(payload: &[u8]) -> (Vec<Vec<u32>>, u32) {
 
     (data, max_value)
 }
+
+// =============================================================================
+// Dongle parsers (per CDC_DONGLE_INTEGRATION.md, opcodes 0xB2–0xB6)
+// =============================================================================
+
+/// RF link snapshot from `RF_STATUS` (0xB3). 27 bytes, idempotent.
+/// Layout: [flags][sig_L][sig_R][hb_age_L u32 LE][hb_age_R u32 LE]
+///         [pkt_rx_L u32 LE][pkt_rx_R u32 LE][pkt_dup_L u32 LE][pkt_dup_R u32 LE]
+#[derive(Debug, Clone, Default)]
+pub struct RfStatus {
+    pub link_left: bool,         // flags bit0
+    pub link_right: bool,        // flags bit1
+    pub sig_left: u8,            // 0..=255 rf_signal_q255 (0 = down)
+    pub sig_right: u8,
+    pub hb_age_left_ms: u32,
+    pub hb_age_right_ms: u32,
+    pub pkt_rx_left: u32,
+    pub pkt_rx_right: u32,
+    pub pkt_dup_left: u32,
+    pub pkt_dup_right: u32,
+}
+
+/// Map a 0..=255 signal value to a 0..=4 bar count per the spec.
+pub fn signal_bars(sig: u8) -> u8 {
+    match sig {
+        s if s >= 200 => 4,
+        s if s >= 140 => 3,
+        s if s >= 80 => 2,
+        s if s >= 30 => 1,
+        _ => 0,
+    }
+}
+
+pub fn parse_rf_status(payload: &[u8]) -> Result<RfStatus, String> {
+    if payload.len() < 27 {
+        return Err(format!("RF_STATUS payload too short: {} bytes (need 27)", payload.len()));
+    }
+    let u32_le = |o: usize| u32::from_le_bytes(payload[o..o + 4].try_into().unwrap());
+    let flags = payload[0];
+    Ok(RfStatus {
+        link_left: flags & 0x01 != 0,
+        link_right: flags & 0x02 != 0,
+        sig_left: payload[1],
+        sig_right: payload[2],
+        hb_age_left_ms: u32_le(3),
+        hb_age_right_ms: u32_le(7),
+        pkt_rx_left: u32_le(11),
+        pkt_rx_right: u32_le(15),
+        pkt_dup_left: u32_le(19),
+        pkt_dup_right: u32_le(23),
+    })
+}
+
+/// Paired halves from `RF_PAIR_LIST` (0xB4). 13 bytes: [paired_count][mac_L:6][mac_R:6].
+/// All-zero MAC = empty slot.
+#[derive(Debug, Clone, Default)]
+pub struct PairList {
+    pub paired_count: u8,
+    pub mac_left: [u8; 6],
+    pub mac_right: [u8; 6],
+}
+
+impl PairList {
+    pub fn left_paired(&self) -> bool { self.mac_left.iter().any(|&b| b != 0) }
+    pub fn right_paired(&self) -> bool { self.mac_right.iter().any(|&b| b != 0) }
+}
+
+pub fn parse_pair_list(payload: &[u8]) -> Result<PairList, String> {
+    if payload.len() < 13 {
+        return Err(format!("RF_PAIR_LIST payload too short: {} bytes (need 13)", payload.len()));
+    }
+    let mut p = PairList { paired_count: payload[0], ..Default::default() };
+    p.mac_left.copy_from_slice(&payload[1..7]);
+    p.mac_right.copy_from_slice(&payload[7..13]);
+    Ok(p)
+}
+
+/// `RF_PAIR_START` (0xB2) response: [set_id_hi][set_id_lo][paired_count]. set_id is big-endian.
+#[derive(Debug, Clone, Copy)]
+pub struct PairStartResp {
+    pub set_id: u16,
+    pub paired_count: u8,
+}
+
+pub fn parse_pair_start(payload: &[u8]) -> Result<PairStartResp, String> {
+    if payload.len() < 3 {
+        return Err(format!("RF_PAIR_START payload too short: {} bytes (need 3)", payload.len()));
+    }
+    Ok(PairStartResp {
+        set_id: ((payload[0] as u16) << 8) | payload[1] as u16,
+        paired_count: payload[2],
+    })
+}
+
+/// Battery slot of `BATTERY` (0xB6), 7 bytes per side. Sentinels:
+/// `batt_dv == 0xFF` → never seen ; `age_ms == 0xFFFFFFFF` → no sample since boot.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HalfBattery {
+    pub batt_dv: u8,
+    pub soc_pct: u8,
+    pub charging: u8,
+    pub age_ms: u32,
+}
+
+impl HalfBattery {
+    pub fn has_value(&self) -> bool { self.batt_dv != 0xFF && self.age_ms != 0xFFFF_FFFF }
+    pub fn is_stale(&self) -> bool { self.age_ms != 0xFFFF_FFFF && self.age_ms > 60_000 }
+}
+
+/// `BATTERY` (0xB6) response: 14 bytes = 2 × `HalfBattery` (LEFT, RIGHT).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Battery {
+    pub left: HalfBattery,
+    pub right: HalfBattery,
+}
+
+pub fn parse_battery(payload: &[u8]) -> Result<Battery, String> {
+    if payload.len() < 14 {
+        return Err(format!("BATTERY payload too short: {} bytes (need 14)", payload.len()));
+    }
+    let parse_slot = |o: usize| HalfBattery {
+        batt_dv: payload[o],
+        soc_pct: payload[o + 1],
+        charging: payload[o + 2],
+        age_ms: u32::from_le_bytes(payload[o + 3..o + 7].try_into().unwrap()),
+    };
+    Ok(Battery {
+        left: parse_slot(0),
+        right: parse_slot(7),
+    })
+}
