@@ -1,11 +1,10 @@
 /// Parsing functions for firmware text and binary responses.
 /// Separated for testability.
 
-/// Keyboard physical dimensions (must match firmware).
-/// ROWS is 5 on every KaSe variant; COLS varies (13 wired, 14 dongle) and is
-/// deduced from the payload at parse time — see `parse_keymap`.
+/// Keyboard row count — 5 on every KaSe variant. The column count varies
+/// (13 wired, 14 dongle) and is deduced from the payload at parse time
+/// (see `parse_keymap` / `parse_keystats_binary`), never hardcoded.
 pub const ROWS: usize = 5;
-pub const COLS: usize = 13;
 
 /// Parse a KEYMAP_GET / KEYMAP_CURRENT keycode block into `[row][col]`.
 ///
@@ -131,51 +130,6 @@ pub fn parse_ko_lines(lines: &[String]) -> Vec<[u8; 4]> {
     }
 
     result
-}
-
-/// Parse heatmap lines (KEYSTATS? response).
-/// Format: "R0:   100    50    30    20    10     5     0    15    25    35    45    55    65"
-/// Returns (data[5][13], max_value).
-pub fn parse_heatmap_lines(lines: &[String]) -> (Vec<Vec<u32>>, u32) {
-    let mut data: Vec<Vec<u32>> = vec![vec![0u32; COLS]; ROWS];
-    let mut max = 0u32;
-
-    for line in lines {
-        let trimmed = line.trim();
-
-        // Only process lines starting with "R"
-        if !trimmed.starts_with('R') {
-            continue;
-        }
-
-        // Find the colon
-        let colon = match trimmed.find(':') {
-            Some(i) => i,
-            None => continue,
-        };
-
-        // Extract row number between "R" and ":"
-        let row_str = &trimmed[1..colon];
-        let row: usize = match row_str.parse() {
-            Ok(r) if r < ROWS => r,
-            _ => continue,
-        };
-
-        // Parse space-separated values after the colon
-        let values_str = &trimmed[colon + 1..];
-        for (col, token) in values_str.split_whitespace().enumerate() {
-            if col >= COLS {
-                break;
-            }
-            let count: u32 = token.parse().unwrap_or(0);
-            data[row][col] = count;
-            if count > max {
-                max = count;
-            }
-        }
-    }
-
-    (data, max)
 }
 
 /// Parsed combo: [index, row1, col1, row2, col2, result_keycode]
@@ -888,8 +842,9 @@ pub fn parse_macros_binary(payload: &[u8]) -> Vec<MacroEntry> {
 }
 
 /// Parse KEYSTATS_BIN (0x40) binary payload.
-/// Format: [rows:u8][cols:u8][counts: rows*cols * u32 LE]
-/// Returns (heatmap_data, max_value) — same shape as parse_heatmap_lines.
+/// Format: [rows:u8][cols:u8][counts: rows*cols * u32 LE].
+/// Dimensions are taken from the header, so the dongle (5x14) and wired (5x13)
+/// boards both parse correctly. Returns (heatmap_data, max_value).
 pub fn parse_keystats_binary(payload: &[u8]) -> (Vec<Vec<u32>>, u32) {
     // Need at least 2 bytes for rows and cols
     let enough_for_header = payload.len() >= 2;
