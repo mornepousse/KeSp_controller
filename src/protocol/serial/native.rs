@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::protocol::binary::{self as bp, KrResponse};
-use crate::protocol::parsers::{ROWS, COLS};
+use crate::protocol::parsers;
 
 const BAUD_RATE: u32 = 115200;
 const CONNECT_TIMEOUT_MS: u64 = 300;
@@ -393,8 +393,7 @@ impl SerialManager {
         // Try v2 binary first
         if self.v2 {
             let resp = self.send_binary(bp::cmd::KEYMAP_GET, &[layer])?;
-            let keymap = self.parse_keymap_payload(&resp.payload)?;
-            return Ok(keymap);
+            return parsers::parse_keymap(&resp.payload);
         }
 
         // Legacy
@@ -410,39 +409,7 @@ impl SerialManager {
 
         // skip 2-byte layer index in legacy
         let data_without_header = &data[2..];
-        self.parse_keymap_payload(data_without_header)
-    }
-
-    fn parse_keymap_payload(&self, data: &[u8]) -> Result<Vec<Vec<u16>>, String> {
-        // v2: [layer:u8][keycodes...] -- skip first byte
-        // legacy: already stripped
-        let expected_with_layer_byte = 1 + ROWS * COLS * 2;
-        let has_layer_byte = data.len() >= expected_with_layer_byte;
-        let offset = if has_layer_byte { 1 } else { 0 };
-        let kc_data = &data[offset..];
-
-        let needed_bytes = ROWS * COLS * 2;
-        if kc_data.len() < needed_bytes {
-            return Err(format!("Keymap data too short: {} bytes (need {})", kc_data.len(), needed_bytes));
-        }
-
-        let mut keymap = Vec::with_capacity(ROWS);
-
-        for row_index in 0..ROWS {
-            let mut row = Vec::with_capacity(COLS);
-
-            for col_index in 0..COLS {
-                let idx = (row_index * COLS + col_index) * 2;
-                let low_byte = kc_data[idx] as u16;
-                let high_byte = (kc_data[idx + 1] as u16) << 8;
-                let keycode = low_byte | high_byte;
-                row.push(keycode);
-            }
-
-            keymap.push(row);
-        }
-
-        Ok(keymap)
+        parsers::parse_keymap(data_without_header)
     }
 
     pub fn get_layer_names(&mut self) -> Result<Vec<String>, String> {

@@ -2,8 +2,44 @@
 /// Separated for testability.
 
 /// Keyboard physical dimensions (must match firmware).
+/// ROWS is 5 on every KaSe variant; COLS varies (13 wired, 14 dongle) and is
+/// deduced from the payload at parse time — see `parse_keymap`.
 pub const ROWS: usize = 5;
 pub const COLS: usize = 13;
+
+/// Parse a KEYMAP_GET / KEYMAP_CURRENT keycode block into `[row][col]`.
+///
+/// `data` is the response payload. For the v2 binary protocol it is
+/// `[layer:u8][keycodes: ROWS*COLS × u16 LE]` (row-major); legacy callers strip
+/// their own header first. The keycode block is always even-length, so an odd
+/// total length means the leading layer byte is present. COLS is derived from
+/// the length (ROWS is fixed), so the 13-col wired board and the 14-col dongle
+/// both parse correctly instead of being scrambled by a hardcoded width.
+pub fn parse_keymap(data: &[u8]) -> Result<Vec<Vec<u16>>, String> {
+    let has_layer_byte = data.len() % 2 == 1;
+    let offset = usize::from(has_layer_byte);
+    let kc = &data[offset..];
+
+    if kc.len() < ROWS * 2 || kc.len() % (ROWS * 2) != 0 {
+        return Err(format!(
+            "Keymap data not a {}-row multiple: {} bytes",
+            ROWS,
+            kc.len()
+        ));
+    }
+    let cols = kc.len() / 2 / ROWS;
+
+    let mut keymap = Vec::with_capacity(ROWS);
+    for r in 0..ROWS {
+        let mut row = Vec::with_capacity(cols);
+        for c in 0..cols {
+            let idx = (r * cols + c) * 2;
+            row.push(u16::from_le_bytes([kc[idx], kc[idx + 1]]));
+        }
+        keymap.push(row);
+    }
+    Ok(keymap)
+}
 
 /// Parse "TD0: 04,05,06,29" lines into an array of 8 tap dance slots.
 /// Each slot has 4 actions: [1-tap, 2-tap, 3-tap, hold].
@@ -1027,4 +1063,55 @@ pub fn parse_battery(payload: &[u8]) -> Result<Battery, String> {
         left: parse_slot(0),
         right: parse_slot(7),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Build a v2 KEYMAP_GET payload: [layer][keycodes LE], value = r*cols+c.
+    fn make_payload(layer: u8, rows: usize, cols: usize) -> Vec<u8> {
+        let mut p = vec![layer];
+        for r in 0..rows {
+            for c in 0..cols {
+                let v = (r * cols + c) as u16;
+                p.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        p
+    }
+
+    #[test]
+    fn dongle_keymap_is_14_cols_not_scrambled() {
+        // Dongle: 5 rows × 14 cols = 70 keycodes, payload = 1 + 140 = 141 bytes.
+        let payload = make_payload(0, ROWS, 14);
+        assert_eq!(payload.len(), 141);
+        let km = parse_keymap(&payload).expect("parse");
+        assert_eq!(km.len(), ROWS);
+        assert_eq!(km[0].len(), 14, "dongle must parse 14 cols");
+        // Every cell must equal r*14+c — a hardcoded 13-col reader shifts rows.
+        for r in 0..ROWS {
+            for c in 0..14 {
+                assert_eq!(km[r][c], (r * 14 + c) as u16, "mismatch at {r},{c}");
+            }
+        }
+    }
+
+    #[test]
+    fn wired_keymap_is_13_cols() {
+        let payload = make_payload(0, ROWS, 13);
+        assert_eq!(payload.len(), 131);
+        let km = parse_keymap(&payload).expect("parse");
+        assert_eq!(km[0].len(), 13);
+        assert_eq!(km[2][5], (2 * 13 + 5) as u16);
+    }
+
+    #[test]
+    fn legacy_stripped_block_has_no_layer_byte() {
+        // Even length (no layer byte) → offset 0.
+        let full = make_payload(0, ROWS, 13);
+        let km = parse_keymap(&full[1..]).expect("parse");
+        assert_eq!(km[0].len(), 13);
+        assert_eq!(km[0][0], 0);
+    }
 }
