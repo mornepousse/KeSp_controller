@@ -59,6 +59,13 @@ export component ConnectionBar inherits Rectangle {
             horizontal-stretch: 1;
         }
 
+        // Connection mode (e.g. "USB direct" / "via dongle (1 clavier)")
+        Text {
+            text: AppState.connection-mode-label;
+            color: Theme.fg-secondary;
+            vertical-alignment: center;
+        }
+
         // Firmware version
         Text {
             text: AppState.firmware-version;

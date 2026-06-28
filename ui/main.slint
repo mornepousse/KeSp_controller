@@ -17,12 +17,14 @@ export { ConnectionBridge, KeymapBridge, SettingsBridge, StatsBridge, AdvancedBr
 component DarkTab inherits Rectangle {
     in property <string> title;
     in property <bool> active;
+    in property <bool> enabled: true;
     callback clicked();
 
     height: 32px;
     horizontal-stretch: 1;
     border-radius: 4px;
     background: root.active ? Theme.bg-secondary : transparent;
+    opacity: root.enabled ? 1.0 : 0.4;
 
     Text {
         text: root.title;
@@ -40,6 +42,7 @@ component DarkTab inherits Rectangle {
     }
 
     TouchArea {
+        enabled: root.enabled;
         clicked => { root.clicked(); }
         mouse-cursor: pointer;
     }
@@ -68,10 +71,10 @@ export component MainWindow inherits Window {
                 padding-right: 8px;
                 spacing: 2px;
 
-                DarkTab { title: "Keymap"; active: root.current-tab == 0; clicked => { root.current-tab = 0; AppState.tab-changed(0); } }
-                DarkTab { title: "Advanced"; active: root.current-tab == 1; clicked => { root.current-tab = 1; AppState.tab-changed(1); } }
-                DarkTab { title: "Macros"; active: root.current-tab == 2; clicked => { root.current-tab = 2; AppState.tab-changed(2); } }
-                DarkTab { title: "Stats"; active: root.current-tab == 3; clicked => { root.current-tab = 3; AppState.tab-changed(3); } }
+                DarkTab { title: "Keymap"; active: root.current-tab == 0; enabled: AppState.keyboard-reachable; clicked => { root.current-tab = 0; AppState.tab-changed(0); } }
+                DarkTab { title: "Advanced"; active: root.current-tab == 1; enabled: AppState.keyboard-reachable; clicked => { root.current-tab = 1; AppState.tab-changed(1); } }
+                DarkTab { title: "Macros"; active: root.current-tab == 2; enabled: AppState.keyboard-reachable; clicked => { root.current-tab = 2; AppState.tab-changed(2); } }
+                DarkTab { title: "Stats"; active: root.current-tab == 3; enabled: AppState.keyboard-reachable; clicked => { root.current-tab = 3; AppState.tab-changed(3); } }
                 DarkTab { title: "Settings"; active: root.current-tab == 4; clicked => { root.current-tab = 4; AppState.tab-changed(4); } }
                 DarkTab { title: "Tools"; active: root.current-tab == 5; clicked => { root.current-tab = 5; AppState.tab-changed(5); } }
                 DarkTab { title: "Dongle"; active: root.current-tab == 6; clicked => { root.current-tab = 6; AppState.tab-changed(6); } }

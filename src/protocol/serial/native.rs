@@ -20,6 +20,7 @@ pub struct SerialManager {
     pub connected: bool,
     pub v2: bool, // true if firmware supports binary protocol v2
     pub is_dongle: bool, // true if the connected device is the wireless dongle (by USB id)
+    connection_kind: crate::protocol::connection::ConnectionKind,
 }
 
 impl SerialManager {
@@ -30,7 +31,12 @@ impl SerialManager {
             connected: false,
             v2: false,
             is_dongle: false,
+            connection_kind: crate::protocol::connection::ConnectionKind::Direct,
         }
+    }
+
+    pub fn connection_kind(&self) -> crate::protocol::connection::ConnectionKind {
+        self.connection_kind
     }
 
     #[allow(dead_code)]
@@ -67,6 +73,7 @@ impl SerialManager {
         self.port_name = port_name.to_string();
         self.connected = true;
         self.v2 = false;
+        self.connection_kind = crate::protocol::connection::ConnectionKind::Direct;
         // Initial guess from USB descriptor; overridden below by the canonical
         // FEATURES tag check once we know the firmware is v2-capable.
         self.is_dongle = Self::port_is_dongle(port_name);
@@ -87,6 +94,18 @@ impl SerialManager {
                 let features = String::from_utf8_lossy(&resp.payload);
                 self.is_dongle = features.split(',').any(|tag| tag.trim() == "RF_DONGLE");
             }
+            // Probe connection kind: dongle responds to RF_PAIR_LIST; keyboard returns error/nothing.
+            let paired = if self.is_dongle {
+                match self.send_binary(bp::cmd::RF_PAIR_LIST, &[]) {
+                    Ok(resp) => crate::protocol::parsers::parse_pair_list(&resp.payload)
+                        .ok()
+                        .map(|pl| pl.paired_count),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+            self.connection_kind = crate::protocol::connection::classify_connection(paired);
         }
 
         Ok(())
@@ -156,26 +175,20 @@ impl SerialManager {
         // First pass: check USB VID/PID and product name
         for port in &ports {
             let port_type = &port.port_type;
-            match port_type {
-                serialport::SerialPortType::UsbPort(usb) => {
-                    let vid_matches = usb.vid == TARGET_VID;
-                    let pid_matches = usb.pid == TARGET_PID;
-                    if vid_matches && pid_matches {
+            if let serialport::SerialPortType::UsbPort(usb) = port_type {
+                let vid_matches = usb.vid == TARGET_VID;
+                let pid_matches = usb.pid == TARGET_PID;
+                if vid_matches && pid_matches {
+                    return Ok(port.port_name.clone());
+                }
+
+                if let Some(product) = &usb.product {
+                    let is_kase = product.contains("KaSe");
+                    let is_kesp = product.contains("KeSp");
+                    if is_kase || is_kesp {
                         return Ok(port.port_name.clone());
                     }
-
-                    match &usb.product {
-                        Some(product) => {
-                            let is_kase = product.contains("KaSe");
-                            let is_kesp = product.contains("KeSp");
-                            if is_kase || is_kesp {
-                                return Ok(port.port_name.clone());
-                            }
-                        }
-                        None => {}
-                    }
                 }
-                _ => {}
             }
         }
 
@@ -186,17 +199,14 @@ impl SerialManager {
                 .args(["info", "-n", &port.port_name])
                 .output();
 
-            match udevadm_result {
-                Ok(output) => {
-                    let stdout_bytes = &output.stdout;
-                    let text = String::from_utf8_lossy(stdout_bytes);
-                    let has_kase = text.contains("KaSe");
-                    let has_kesp = text.contains("KeSp");
-                    if has_kase || has_kesp {
-                        return Ok(port.port_name.clone());
-                    }
+            if let Ok(output) = udevadm_result {
+                let stdout_bytes = &output.stdout;
+                let text = String::from_utf8_lossy(stdout_bytes);
+                let has_kase = text.contains("KaSe");
+                let has_kesp = text.contains("KeSp");
+                if has_kase || has_kesp {
+                    return Ok(port.port_name.clone());
                 }
-                Err(_) => {}
             }
         }
 
@@ -214,6 +224,7 @@ impl SerialManager {
         self.connected = false;
         self.v2 = false;
         self.is_dongle = false;
+        self.connection_kind = crate::protocol::connection::ConnectionKind::Direct;
     }
 
     // ==================== LOW-LEVEL: ASCII LEGACY ====================
@@ -349,7 +360,22 @@ impl SerialManager {
         flush_result.map_err(|e| format!("Flush: {}", e))?;
 
         std::thread::sleep(Duration::from_millis(BINARY_SETTLE_MS));
-        let raw = self.read_raw(BINARY_READ_TIMEOUT_MS)?;
+        let timeout_ms = crate::protocol::connection::read_timeout_ms(
+            cmd_id,
+            self.connection_kind,
+            BINARY_READ_TIMEOUT_MS,
+        );
+        let raw = self.read_raw(timeout_ms)?;
+
+        if raw.is_empty()
+            && matches!(
+                self.connection_kind,
+                crate::protocol::connection::ConnectionKind::Dongle { .. }
+            )
+            && !crate::protocol::connection::is_dongle_local(cmd_id)
+        {
+            return Err("Clavier injoignable via le dongle (eteint / hors portee)".into());
+        }
 
         let (resp, _remaining) = bp::parse_kr(&raw)?;
         let firmware_ok = resp.is_ok();
@@ -367,14 +393,11 @@ impl SerialManager {
         // Try v2 binary first
         if self.v2 {
             let binary_result = self.send_binary(bp::cmd::VERSION, &[]);
-            match binary_result {
-                Ok(resp) => {
-                    let raw_bytes = &resp.payload;
-                    let lossy_string = String::from_utf8_lossy(raw_bytes);
-                    let version = lossy_string.to_string();
-                    return Some(version);
-                }
-                Err(_) => {}
+            if let Ok(resp) = binary_result {
+                let raw_bytes = &resp.payload;
+                let lossy_string = String::from_utf8_lossy(raw_bytes);
+                let version = lossy_string.to_string();
+                return Some(version);
             }
         }
 
@@ -385,8 +408,8 @@ impl SerialManager {
             Err(_) => return None,
         };
         let mut line_iter = lines.into_iter();
-        let first_line = line_iter.next();
-        first_line
+        
+        line_iter.next()
     }
 
     pub fn get_keymap(&mut self, layer: u8) -> Result<Vec<Vec<u16>>, String> {
@@ -457,32 +480,29 @@ impl SerialManager {
 
         // Legacy fallback: try C> binary protocol
         let legacy_result = self.query_legacy_binary("LAYOUTS?");
-        match legacy_result {
-            Ok((cmd_type, data)) => {
-                let is_layout_type = cmd_type == 4;
-                let has_data = !data.is_empty();
+        if let Ok((cmd_type, data)) = legacy_result {
+            let is_layout_type = cmd_type == 4;
+            let has_data = !data.is_empty();
 
-                if is_layout_type && has_data {
-                    let text = String::from_utf8_lossy(&data);
-                    let parts = text.split(';');
-                    let non_empty = parts.filter(|s| !s.is_empty());
-                    let trimmed_names = non_empty.map(|s| {
-                        let long_enough = s.len() > 1;
-                        if long_enough {
-                            s[1..].to_string()
-                        } else {
-                            s.to_string()
-                        }
-                    });
-                    let names: Vec<String> = trimmed_names.collect();
-
-                    let found_names = !names.is_empty();
-                    if found_names {
-                        return Ok(names);
+            if is_layout_type && has_data {
+                let text = String::from_utf8_lossy(&data);
+                let parts = text.split(';');
+                let non_empty = parts.filter(|s| !s.is_empty());
+                let trimmed_names = non_empty.map(|s| {
+                    let long_enough = s.len() > 1;
+                    if long_enough {
+                        s[1..].to_string()
+                    } else {
+                        s.to_string()
                     }
+                });
+                let names: Vec<String> = trimmed_names.collect();
+
+                let found_names = !names.is_empty();
+                if found_names {
+                    return Ok(names);
                 }
             }
-            Err(_) => {}
         }
 
         // Last resort: raw text
@@ -491,7 +511,7 @@ impl SerialManager {
         let raw = self.read_raw(BINARY_READ_TIMEOUT_MS)?;
 
         let text = String::from_utf8_lossy(&raw);
-        let split_by_delimiters = text.split(|c: char| c == ';' || c == '\n');
+        let split_by_delimiters = text.split([';', '\n']);
 
         let cleaned = split_by_delimiters.map(|s| {
             let step1 = s.trim();
@@ -535,11 +555,16 @@ impl SerialManager {
         self.send_command("LAYOUT?")?;
         std::thread::sleep(Duration::from_millis(LEGACY_BINARY_SETTLE_MS));
 
+        let json_timeout_ms = crate::protocol::connection::read_timeout_ms(
+            bp::cmd::GET_LAYOUT_JSON,
+            self.connection_kind,
+            JSON_TIMEOUT_SECS * 1000,
+        );
         let port = self.port.as_mut().ok_or("Not connected")?;
         let mut result = String::new();
         let mut buf = [0u8; 4096];
         let start = Instant::now();
-        let max_wait = Duration::from_secs(JSON_TIMEOUT_SECS);
+        let max_wait = Duration::from_millis(json_timeout_ms);
         let mut brace_count: i32 = 0;
         let mut started = false;
 
@@ -593,6 +618,6 @@ pub type SharedSerial = Arc<Mutex<SerialManager>>;
 pub fn new_shared() -> SharedSerial {
     let manager = SerialManager::new();
     let mutex = Mutex::new(manager);
-    let shared = Arc::new(mutex);
-    shared
+    
+    Arc::new(mutex)
 }

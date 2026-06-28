@@ -107,7 +107,7 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
                 if !w.global::<AppState>().get_is_dongle() { return; }
                 let n = tick.get();
                 tick.set(n.wrapping_add(1));
-                let do_slow = n % 5 == 0;
+                let do_slow = n.is_multiple_of(5);
                 let serial = serial.clone();
                 let tx = tx.clone();
                 std::thread::spawn(move || {
@@ -129,6 +129,7 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
     window.run().unwrap();
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_msg(
     window: &MainWindow,
     msg: BgMsg,
@@ -185,6 +186,8 @@ fn handle_msg(
             app.set_connection(ConnectionState::Disconnected);
             app.set_firmware_version(SharedString::default());
             app.set_status_text("Disconnected".into());
+            app.set_connection_mode_label(SharedString::default());
+            app.set_keyboard_reachable(true);
         }
         BgMsg::LayoutPreview(json) => {
             models::populate_layout_preview(window, &json, layout_edit, layout_sel);
@@ -502,6 +505,24 @@ fn handle_msg(
         BgMsg::RfModeChanged(dongle_mode) => {
             window.global::<AppState>().set_is_dongle(dongle_mode);
             is_dongle.set(dongle_mode);
+        }
+        BgMsg::ConnectionMode(kind) => {
+            use crate::protocol::connection::ConnectionKind;
+            let app = window.global::<AppState>();
+            let (label, reachable) = match kind {
+                ConnectionKind::Direct => ("USB direct".to_string(), true),
+                ConnectionKind::Dongle { paired_count: 0 } => {
+                    ("via dongle (aucun clavier appaire)".to_string(), false)
+                }
+                ConnectionKind::Dongle { paired_count: n } => {
+                    (format!("via dongle ({} clavier)", n), true)
+                }
+            };
+            app.set_connection_mode_label(SharedString::from(label));
+            app.set_keyboard_reachable(reachable);
+            if !reachable {
+                app.set_status_text(SharedString::from("Aucun clavier appaire au dongle"));
+            }
         }
         BgMsg::RfStatus(s) => {
             let make_side = |up: bool, sig: u8, hb_ms: u32, rx: u32, dup: u32| LinkSideData {

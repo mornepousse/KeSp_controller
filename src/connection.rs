@@ -20,6 +20,7 @@ fn connect_and_load(ser: &mut SerialManager, tx: &mpsc::Sender<BgMsg>, port: Opt
         Ok(port_name) => {
             let fw = ser.get_firmware_version().unwrap_or_default();
             let _ = tx.send(BgMsg::RfModeChanged(ser.is_dongle));
+            let _ = tx.send(BgMsg::ConnectionMode(ser.connection_kind()));
 
             let names = ser.get_layer_names().unwrap_or_default();
             let km = ser.get_keymap(0).unwrap_or_default();
