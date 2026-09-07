@@ -148,9 +148,18 @@ de `is_dongle` quand `FEATURES` échoue (§5). Ce repli est une compatibilité
 descendante avec les firmwares antérieurs à `FEATURES`, pas une source de vérité
 — il est nommé comme tel dans le code.
 
-Prédicat : VID `0xCAFE`, ou produit contenant `KaSe` / `KeSp` / `Niphargus` /
-`Dongle`. Label : la chaîne produit telle que rapportée, p. ex.
+Prédicat : VID `0xCAFE`, ou produit contenant `KaSe` / `KeSp` / `Niphargus`.
+Label : la chaîne produit telle que rapportée, p. ex.
 `Niphargus Left (/dev/ttyACM0)`.
+
+**Tous les fragments sont des marques, aucun n'est un mot générique.** Une
+première rédaction de cette spec ajoutait `Dongle` à la liste : la branche
+nom-produit n'ayant aucun garde VID, tout appareil de tout fabricant nommé
+« 2.4G Wireless Dongle » ou « USB Bluetooth Dongle » devenait un de nos claviers,
+listé et éligible à un auto-connect qui retourne au premier match. L'entrée était
+de surcroît redondante — le dongle réel s'appelle `KaSe Dongle` et matche déjà
+sur `KaSe`. Un garde VID aurait été plus faible que la suppression : le VID
+Espressif `0x303A` est celui de milliers d'appareils ESP32 tiers.
 
 La souris Conchodytes (`0x303A:0x4002`) reste exclue — par intention désormais,
 et non par accident : on ne matche plus sur le VID Espressif seul.
