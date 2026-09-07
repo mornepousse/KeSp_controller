@@ -3,7 +3,6 @@
 
 use super::keycode;
 use super::layout::UNIT_PX;
-use super::parsers::DEFAULT_ROWS as ROWS;
 
 /// Which hand a column belongs to.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -22,8 +21,18 @@ pub enum Finger {
     Thumb,
 }
 
-/// Row names for the 5 rows.
-const ROW_NAMES: [&str; 5] = ["Number", "Upper", "Home", "Lower", "Thumb"];
+/// Libellés de rangées pour un clavier de `rows` rangées.
+/// Cinq rangées gardent les noms KaSe historiques ; quatre rangées perdent
+/// « Number », qu'une carte 4 rangées n'a pas. Au-delà, on numérote plutôt que
+/// d'inventer une ergonomie.
+pub fn row_labels(rows: usize) -> Vec<String> {
+    const FIVE: [&str; 5] = ["Number", "Upper", "Home", "Lower", "Thumb"];
+    match rows {
+        5 => FIVE.iter().map(|s| s.to_string()).collect(),
+        4 => FIVE[1..].iter().map(|s| s.to_string()).collect(),
+        n => (0..n).map(|r| format!("Row {}", r)).collect(),
+    }
+}
 
 /// Finger names (French).
 const FINGER_NAMES: [&str; 5] = ["Pinky", "Ring", "Middle", "Index", "Thumb"];
@@ -203,24 +212,17 @@ pub fn finger_load(heatmap: &[Vec<u32>]) -> Vec<FingerLoad> {
     result
 }
 
-/// Compute row usage.
+/// Compute row usage. The row count comes from the heatmap itself, which the
+/// firmware sizes from its own matrix (`KEYSTATS_BIN` header).
 pub fn row_usage(heatmap: &[Vec<u32>]) -> Vec<RowUsage> {
-    let mut row_counts = [0u32; ROWS];
-
-    for (r, row) in heatmap.iter().enumerate() {
-        if r >= ROWS { break; }
-        let row_sum: u32 = row.iter().sum();
-        row_counts[r] = row_sum;
-    }
-
+    let labels = row_labels(heatmap.len());
+    let row_counts: Vec<u32> = heatmap.iter().map(|row| row.iter().sum()).collect();
     let total: u32 = row_counts.iter().sum();
-    let mut result = Vec::with_capacity(ROWS);
 
-    for r in 0..ROWS {
-        let count = row_counts[r];
+    let mut result = Vec::with_capacity(row_counts.len());
+    for (r, &count) in row_counts.iter().enumerate() {
         let pct = if total > 0 { count as f32 / total as f32 * 100.0 } else { 0.0 };
-        let name = ROW_NAMES[r].to_string();
-        result.push(RowUsage { name, row: r, count, pct });
+        result.push(RowUsage { name: labels[r].clone(), row: r, count, pct });
     }
 
     result
@@ -438,5 +440,34 @@ mod hand_split_tests {
         assert_eq!(hand_for_x(50.0, two), Hand::Left);
         assert_eq!(hand_for_x(150.0, two), Hand::Right);
         assert_eq!(hand_for_x(50.0, HandSplit::OneHand(Hand::Right)), Hand::Right);
+    }
+}
+
+#[cfg(test)]
+mod row_label_tests {
+    use super::*;
+
+    #[test]
+    fn five_rows_keep_the_historical_kase_names() {
+        assert_eq!(row_labels(5), vec!["Number", "Upper", "Home", "Lower", "Thumb"]);
+    }
+
+    #[test]
+    fn four_rows_drop_the_number_row_the_board_does_not_have() {
+        assert_eq!(row_labels(4), vec!["Upper", "Home", "Lower", "Thumb"]);
+    }
+
+    #[test]
+    fn an_unknown_row_count_gets_numbered_labels() {
+        assert_eq!(row_labels(2), vec!["Row 0", "Row 1"]);
+    }
+
+    #[test]
+    fn row_usage_follows_the_heatmap_height_not_a_constant() {
+        let heatmap = vec![vec![1u32; 7], vec![2u32; 7], vec![3u32; 7], vec![4u32; 7]];
+        let usage = row_usage(&heatmap);
+        assert_eq!(usage.len(), 4);
+        assert_eq!(usage[0].name, "Upper");
+        assert_eq!(usage[3].count, 4 * 7);
     }
 }
