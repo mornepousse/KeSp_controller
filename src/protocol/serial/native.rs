@@ -27,6 +27,16 @@ pub fn is_family_product(product: &str, vid: u16) -> bool {
     vid == KEYBOARD_VID || FAMILY_PRODUCTS.iter().any(|p| product.contains(p))
 }
 
+/// Cet appareil est-il le dongle sans fil ?
+///
+/// La décision se lit dans le nom produit, jamais dans le VID : le VID
+/// Espressif est partagé avec la souris Conchodytes. C'est une supposition
+/// initiale d'après le descripteur USB — au branchement, le tag `RF_DONGLE`
+/// de la réponse FEATURES fait autorité (`SerialManager::connect`).
+pub fn is_dongle_product(product: &str) -> bool {
+    product.contains("Dongle")
+}
+
 /// Libellé d'un port dans la liste déroulante : le nom que l'appareil rapporte,
 /// pas un nom de famille codé en dur.
 pub fn port_label(product: &str, port_name: &str) -> String {
@@ -154,7 +164,7 @@ impl SerialManager {
         if !is_family_product(&product, usb.vid) {
             return None;
         }
-        let is_dongle = product.contains("Dongle");
+        let is_dongle = is_dongle_product(&product);
         Some((port_label(&product, &port.port_name), is_dongle))
     }
 
@@ -666,5 +676,22 @@ mod usb_match_tests {
     #[test]
     fn a_nameless_device_still_gets_a_usable_label() {
         assert_eq!(port_label("", "/dev/ttyACM1"), "Keyboard (/dev/ttyACM1)");
+    }
+
+    #[test]
+    fn the_dongle_is_recognised_by_its_product_name() {
+        assert!(is_dongle_product("KaSe Dongle"));
+    }
+
+    #[test]
+    fn a_keyboard_is_not_a_dongle() {
+        assert!(!is_dongle_product("KaSe V2"));
+        assert!(!is_dongle_product("Niphargus Left"));
+    }
+
+    #[test]
+    fn the_conchodytes_mouse_is_not_a_dongle_despite_the_shared_vid() {
+        // Même VID Espressif que le dongle ; seul le nom produit les sépare.
+        assert!(!is_dongle_product("Conchodytes"));
     }
 }
