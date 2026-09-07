@@ -15,7 +15,11 @@ const BINARY_SETTLE_MS: u64 = 30;
 const JSON_TIMEOUT_SECS: u64 = 3;
 
 /// Fragments de chaîne produit qui marquent un appareil comme étant des nôtres.
-const FAMILY_PRODUCTS: [&str; 4] = ["KaSe", "KeSp", "Niphargus", "Dongle"];
+/// Tous sont des marques : aucun mot générique. « Dongle » en a été retiré —
+/// le dongle réel s'appelle « KaSe Dongle » et matche déjà sur « KaSe », donc
+/// l'entrée était redondante pour tout matériel réel et ne produisait que des
+/// faux positifs (« 2.4G Wireless Dongle » d'un autre fabricant).
+const FAMILY_PRODUCTS: [&str; 3] = ["KaSe", "KeSp", "Niphargus"];
 
 /// Cet appareil USB est-il des nôtres ?
 ///
@@ -693,5 +697,13 @@ mod usb_match_tests {
     fn the_conchodytes_mouse_is_not_a_dongle_despite_the_shared_vid() {
         // Même VID Espressif que le dongle ; seul le nom produit les sépare.
         assert!(!is_dongle_product("Conchodytes"));
+    }
+
+    #[test]
+    fn another_vendors_dongle_is_not_ours() {
+        // Un récepteur 2,4 GHz ou un adaptateur Bluetooth quelconque : le mot
+        // « Dongle » est générique, il ne doit désigner personne à lui seul.
+        assert!(!is_family_product("2.4G Wireless Dongle", 0x046D));
+        assert!(!is_family_product("USB Bluetooth Dongle", 0x0A12));
     }
 }
