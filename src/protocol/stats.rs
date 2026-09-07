@@ -469,5 +469,9 @@ mod row_label_tests {
         assert_eq!(usage.len(), 4);
         assert_eq!(usage[0].name, "Upper");
         assert_eq!(usage[3].count, 4 * 7);
+        // Les pourcentages portent sur le total réel (70), pas sur un total
+        // supposé de cinq rangées : 7/14/21/28 sur 70 font 10/20/30/40.
+        assert!((usage[0].pct - 10.0).abs() < 0.01, "pct[0] = {}", usage[0].pct);
+        assert!((usage[3].pct - 40.0).abs() < 0.01, "pct[3] = {}", usage[3].pct);
     }
 }
