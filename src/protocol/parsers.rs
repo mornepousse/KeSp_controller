@@ -1,35 +1,38 @@
 //! Parsing functions for firmware text and binary responses.
 //! Separated for testability.
 
-/// Keyboard row count — 5 on every KaSe variant. The column count varies
-/// (13 wired, 14 dongle) and is deduced from the payload at parse time
-/// (see `parse_keymap` / `parse_keystats_binary`), never hardcoded.
-pub const ROWS: usize = 5;
+/// Rangées supposées quand l'appareil ne déclare rien. Les cartes KaSe sont en
+/// 5 rangées ; le Niphargus est en 4. La vraie valeur vient du profil de
+/// l'appareil (`protocol::device::DeviceProfile`), jamais d'ici.
+pub const DEFAULT_ROWS: usize = 5;
 
 /// Parse a KEYMAP_GET / KEYMAP_CURRENT keycode block into `[row][col]`.
 ///
 /// `data` is the response payload. For the v2 binary protocol it is
-/// `[layer:u8][keycodes: ROWS*COLS × u16 LE]` (row-major); legacy callers strip
+/// `[layer:u8][keycodes: rows*cols × u16 LE]` (row-major); legacy callers strip
 /// their own header first. The keycode block is always even-length, so an odd
-/// total length means the leading layer byte is present. COLS is derived from
-/// the length (ROWS is fixed), so the 13-col wired board and the 14-col dongle
-/// both parse correctly instead of being scrambled by a hardcoded width.
-pub fn parse_keymap(data: &[u8]) -> Result<Vec<Vec<u16>>, String> {
+/// total length means the leading layer byte is present. `rows` comes from the
+/// device profile and `cols` is derived from the payload length, so a 5×13
+/// wired board, a 5×14 dongle and a 4×7 Niphargus half all parse correctly.
+pub fn parse_keymap(data: &[u8], rows: usize) -> Result<Vec<Vec<u16>>, String> {
+    if rows == 0 {
+        return Err("Row count must be non-zero".into());
+    }
     let has_layer_byte = data.len() % 2 == 1;
     let offset = usize::from(has_layer_byte);
     let kc = &data[offset..];
 
-    if kc.len() < ROWS * 2 || !kc.len().is_multiple_of(ROWS * 2) {
+    if kc.len() < rows * 2 || !kc.len().is_multiple_of(rows * 2) {
         return Err(format!(
             "Keymap data not a {}-row multiple: {} bytes",
-            ROWS,
+            rows,
             kc.len()
         ));
     }
-    let cols = kc.len() / 2 / ROWS;
+    let cols = kc.len() / 2 / rows;
 
-    let mut keymap = Vec::with_capacity(ROWS);
-    for r in 0..ROWS {
+    let mut keymap = Vec::with_capacity(rows);
+    for r in 0..rows {
         let mut row = Vec::with_capacity(cols);
         for c in 0..cols {
             let idx = (r * cols + c) * 2;
@@ -1035,14 +1038,14 @@ mod tests {
     #[test]
     fn dongle_keymap_is_14_cols_not_scrambled() {
         // Dongle: 5 rows × 14 cols = 70 keycodes, payload = 1 + 140 = 141 bytes.
-        let payload = make_payload(0, ROWS, 14);
+        let payload = make_payload(0, DEFAULT_ROWS, 14);
         assert_eq!(payload.len(), 141);
-        let km = parse_keymap(&payload).expect("parse");
-        assert_eq!(km.len(), ROWS);
+        let km = parse_keymap(&payload, DEFAULT_ROWS).expect("parse");
+        assert_eq!(km.len(), DEFAULT_ROWS);
         assert_eq!(km[0].len(), 14, "dongle must parse 14 cols");
         // Every cell must equal r*14+c — a hardcoded 13-col reader shifts rows.
         #[allow(clippy::needless_range_loop)]
-        for r in 0..ROWS {
+        for r in 0..DEFAULT_ROWS {
             for c in 0..14 {
                 assert_eq!(km[r][c], (r * 14 + c) as u16, "mismatch at {r},{c}");
             }
@@ -1051,9 +1054,9 @@ mod tests {
 
     #[test]
     fn wired_keymap_is_13_cols() {
-        let payload = make_payload(0, ROWS, 13);
+        let payload = make_payload(0, DEFAULT_ROWS, 13);
         assert_eq!(payload.len(), 131);
-        let km = parse_keymap(&payload).expect("parse");
+        let km = parse_keymap(&payload, DEFAULT_ROWS).expect("parse");
         assert_eq!(km[0].len(), 13);
         assert_eq!(km[2][5], (2 * 13 + 5) as u16);
     }
@@ -1061,9 +1064,29 @@ mod tests {
     #[test]
     fn legacy_stripped_block_has_no_layer_byte() {
         // Even length (no layer byte) → offset 0.
-        let full = make_payload(0, ROWS, 13);
-        let km = parse_keymap(&full[1..]).expect("parse");
+        let full = make_payload(0, DEFAULT_ROWS, 13);
+        let km = parse_keymap(&full[1..], DEFAULT_ROWS).expect("parse");
         assert_eq!(km[0].len(), 13);
         assert_eq!(km[0][0], 0);
+    }
+
+    #[test]
+    fn keymap_parses_a_four_by_seven_niphargus_half() {
+        let payload = make_payload(0, 4, 7);
+        let km = parse_keymap(&payload, 4).expect("parse");
+        assert_eq!(km.len(), 4);
+        assert_eq!(km[0].len(), 7, "niphargus half must parse 7 cols");
+        assert_eq!(km[3][6], (3 * 7 + 6) as u16);
+    }
+
+    #[test]
+    fn keymap_rejects_a_payload_that_is_not_a_row_multiple() {
+        let err = parse_keymap(&[0u8; 10], 4).unwrap_err();
+        assert!(err.contains("4-row multiple"), "message doit citer les rangées: {}", err);
+    }
+
+    #[test]
+    fn keymap_rejects_zero_rows() {
+        assert!(parse_keymap(&[0u8; 8], 0).is_err());
     }
 }

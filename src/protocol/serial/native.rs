@@ -416,7 +416,7 @@ impl SerialManager {
         // Try v2 binary first
         if self.v2 {
             let resp = self.send_binary(bp::cmd::KEYMAP_GET, &[layer])?;
-            return parsers::parse_keymap(&resp.payload);
+            return parsers::parse_keymap(&resp.payload, parsers::DEFAULT_ROWS);
         }
 
         // Legacy
@@ -432,7 +432,7 @@ impl SerialManager {
 
         // skip 2-byte layer index in legacy
         let data_without_header = &data[2..];
-        parsers::parse_keymap(data_without_header)
+        parsers::parse_keymap(data_without_header, parsers::DEFAULT_ROWS)
     }
 
     pub fn get_layer_names(&mut self) -> Result<Vec<String>, String> {

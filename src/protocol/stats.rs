@@ -2,7 +2,7 @@
 //! Transforms raw heatmap data into structured analysis for the stats tab.
 
 use super::keycode;
-use super::parsers::ROWS;
+use super::parsers::DEFAULT_ROWS as ROWS;
 
 /// Which hand a column belongs to.
 #[derive(Clone, Copy, PartialEq)]
