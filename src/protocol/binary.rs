@@ -95,7 +95,6 @@ pub mod cmd {
     pub const BATTERY: u8 = 0xB6;
 }
 
-#[allow(dead_code)]
 pub mod status {
     pub const OK: u8 = 0x00;
     pub const ERR_UNKNOWN: u8 = 0x01;
@@ -248,6 +247,14 @@ impl KrResponse {
         self.status == status::OK
     }
 
+    /// L'appareil n'implémente pas cette commande. Ce n'est pas un échec, c'est
+    /// une déclaration de capacité : le dongle du Niphargus répond ça à toutes
+    /// les commandes keymap, parce qu'il n'a pas de moteur keymap. L'appelant
+    /// doit griser la fonction, pas afficher une erreur.
+    pub fn is_unsupported(&self) -> bool {
+        self.status == status::ERR_UNKNOWN
+    }
+
     pub fn status_name(&self) -> &str {
         match self.status {
             status::OK => "OK",
@@ -319,4 +326,30 @@ pub fn parse_all_kr(data: &[u8]) -> Vec<KrResponse> {
         }
     }
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn err_unknown_is_a_capability_statement_not_a_failure() {
+        let r = KrResponse { cmd: 0x13, status: status::ERR_UNKNOWN, payload: vec![] };
+        assert!(r.is_unsupported());
+        assert!(!r.is_ok());
+    }
+
+    #[test]
+    fn a_real_error_is_not_reported_as_unsupported() {
+        let r = KrResponse { cmd: 0x13, status: status::ERR_RANGE, payload: vec![] };
+        assert!(!r.is_unsupported());
+        assert!(!r.is_ok());
+    }
+
+    #[test]
+    fn a_successful_response_is_neither() {
+        let r = KrResponse { cmd: 0x13, status: status::OK, payload: vec![] };
+        assert!(r.is_ok());
+        assert!(!r.is_unsupported());
+    }
 }
