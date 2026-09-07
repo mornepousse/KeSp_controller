@@ -188,6 +188,11 @@ fn handle_msg(
             app.set_status_text("Disconnected".into());
             app.set_connection_mode_label(SharedString::default());
             app.set_keyboard_reachable(true);
+            // Sans ça, une reconnexion vers un AUTRE appareil (geometrie
+            // differente) peut voir BgMsg::LayoutJson recalculer les libelles
+            // de touches avec la keymap de l'appareil precedent, avant que
+            // BgMsg::Connected n'arrive avec la nouvelle.
+            current_keymap.borrow_mut().clear();
         }
         BgMsg::LayoutPreview(json) => {
             models::populate_layout_preview(window, &json, layout_edit, layout_sel);

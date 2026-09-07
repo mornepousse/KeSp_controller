@@ -50,7 +50,16 @@ fn connect_and_load(ser: &mut SerialManager, tx: &mpsc::Sender<BgMsg>, port: Opt
             let _ = tx.send(BgMsg::Profile(ser.profile.clone()));
 
             let names = ser.get_layer_names().unwrap_or_default();
-            let km = ser.get_keymap(0).unwrap_or_default();
+            let km = match ser.get_keymap(0) {
+                Ok(km) => km,
+                Err(e) => {
+                    eprintln!(
+                        "get_keymap error (geometrie {}x{}): {}",
+                        ser.profile.rows, ser.profile.cols, e
+                    );
+                    Vec::new()
+                }
+            };
             let _ = tx.send(BgMsg::Connected(port_name, fw, names, km));
         }
         Err(e) => {

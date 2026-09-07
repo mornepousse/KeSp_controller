@@ -117,6 +117,10 @@ impl SerialManager {
         // Initial guess from USB descriptor; overridden below by the canonical
         // FEATURES tag check once we know the firmware is v2-capable.
         self.is_dongle = Self::port_is_dongle(port_name);
+        // Repartir a zero : sans ca, connect() vers un appareil different
+        // heriterait la geometrie/nom/features du precedent jusqu'a ce que
+        // FEATURES et le layout reviennent les ecraser.
+        self.profile = crate::protocol::device::DeviceProfile::default();
 
         // Detect v2: try PING
         if let Some(p) = self.port.as_mut() {
