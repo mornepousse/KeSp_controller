@@ -9,6 +9,7 @@ pub mod device;
 pub mod flasher;
 #[allow(dead_code)]
 pub mod keycode;
+#[allow(dead_code)]
 pub mod layout;
 #[allow(dead_code)]
 pub mod layout_remap;
