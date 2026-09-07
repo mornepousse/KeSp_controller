@@ -501,6 +501,9 @@ fn handle_msg(
                 mb.set_new_slot_idx(next_slot);
             }
         }
+        BgMsg::Profile(p) => {
+            eprintln!("device: {} — {}x{}, {} capacites", p.name, p.rows, p.cols, p.features.len());
+        }
         // Dongle / wireless messages (per CDC_DONGLE_INTEGRATION.md)
         BgMsg::RfModeChanged(dongle_mode) => {
             window.global::<AppState>().set_is_dongle(dongle_mode);

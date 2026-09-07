@@ -58,6 +58,8 @@ pub struct SerialManager {
     pub v2: bool, // true if firmware supports binary protocol v2
     pub is_dongle: bool, // true if the connected device is the wireless dongle (by USB id)
     connection_kind: crate::protocol::connection::ConnectionKind,
+    /// Ce que l'appareil a déclaré de lui-même au branchement.
+    pub profile: crate::protocol::device::DeviceProfile,
 }
 
 impl SerialManager {
@@ -69,6 +71,7 @@ impl SerialManager {
             v2: false,
             is_dongle: false,
             connection_kind: crate::protocol::connection::ConnectionKind::Direct,
+            profile: crate::protocol::device::DeviceProfile::default(),
         }
     }
 
@@ -128,8 +131,9 @@ impl SerialManager {
             // the firmware exposes its role via FEATURES tags. The `RF_DONGLE`
             // tag is the official marker; absent = standalone keyboard.
             if let Ok(resp) = self.send_binary(bp::cmd::FEATURES, &[]) {
-                let features = String::from_utf8_lossy(&resp.payload);
-                self.is_dongle = features.split(',').any(|tag| tag.trim() == "RF_DONGLE");
+                let csv = String::from_utf8_lossy(&resp.payload);
+                self.profile.features = crate::protocol::device::parse_features_csv(&csv);
+                self.is_dongle = self.profile.has("RF_DONGLE");
             }
             // Probe connection kind: dongle responds to RF_PAIR_LIST; keyboard returns error/nothing.
             let paired = if self.is_dongle {
@@ -240,6 +244,7 @@ impl SerialManager {
         self.v2 = false;
         self.is_dongle = false;
         self.connection_kind = crate::protocol::connection::ConnectionKind::Direct;
+        self.profile = crate::protocol::device::DeviceProfile::default();
     }
 
     // ==================== LOW-LEVEL: ASCII LEGACY ====================
@@ -431,7 +436,7 @@ impl SerialManager {
         // Try v2 binary first
         if self.v2 {
             let resp = self.send_binary(bp::cmd::KEYMAP_GET, &[layer])?;
-            return parsers::parse_keymap(&resp.payload, parsers::DEFAULT_ROWS);
+            return parsers::parse_keymap(&resp.payload, self.profile.rows);
         }
 
         // Legacy
@@ -447,7 +452,7 @@ impl SerialManager {
 
         // skip 2-byte layer index in legacy
         let data_without_header = &data[2..];
-        parsers::parse_keymap(data_without_header, parsers::DEFAULT_ROWS)
+        parsers::parse_keymap(data_without_header, self.profile.rows)
     }
 
     pub fn get_layer_names(&mut self) -> Result<Vec<String>, String> {

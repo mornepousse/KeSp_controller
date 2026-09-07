@@ -124,4 +124,31 @@ mod tests {
         assert_eq!(resolve_geometry(Some((0, 7)), Some((5, 14))), (5, 14));
         assert_eq!(resolve_geometry(Some((4, 0)), None), (DEFAULT_ROWS, DEFAULT_COLS));
     }
+
+    /// Construire un profil comme le fait `connect_and_load`, sans matériel.
+    #[test]
+    fn a_niphargus_profile_is_built_from_its_own_answers() {
+        let features = parse_features_csv("MT,LT,COMBO,TAP_DANCE");
+        let (rows, cols) = resolve_geometry(Some((4, 7)), None);
+        let p = DeviceProfile {
+            name: "Niphargus Left".to_string(),
+            rows,
+            cols,
+            features,
+        };
+        assert_eq!(p.rows, 4);
+        assert_eq!(p.cols, 7);
+        assert!(p.has("TAP_DANCE"));
+        assert!(!p.has("RF_DONGLE"), "une moitie n est pas un dongle");
+    }
+
+    #[test]
+    fn a_dongle_profile_keeps_its_rf_tags_and_the_default_geometry() {
+        let features = parse_features_csv("MT,LT,RF_DONGLE,RF_STATUS,BATTERY");
+        let (rows, cols) = resolve_geometry(None, None);
+        let p = DeviceProfile { name: "KaSe Dongle".to_string(), rows, cols, features };
+        assert!(p.has("RF_DONGLE"));
+        assert!(p.has("BATTERY"));
+        assert_eq!((p.rows, p.cols), (DEFAULT_ROWS, DEFAULT_COLS));
+    }
 }

@@ -22,19 +22,36 @@ fn connect_and_load(ser: &mut SerialManager, tx: &mpsc::Sender<BgMsg>, port: Opt
             let _ = tx.send(BgMsg::RfModeChanged(ser.is_dongle));
             let _ = tx.send(BgMsg::ConnectionMode(ser.connection_kind()));
 
+            // Le layout AVANT la keymap : c'est lui qui porte la géométrie, et
+            // `get_keymap` en a besoin pour découper le payload en rangées.
+            match ser.get_layout_json() {
+                Ok(json) => {
+                    let (rows, cols) = protocol::device::resolve_geometry(
+                        protocol::layout::parse_geometry(&json),
+                        None,
+                    );
+                    ser.profile.rows = rows;
+                    ser.profile.cols = cols;
+                    if let Some(name) = protocol::layout::parse_name(&json) {
+                        ser.profile.name = name;
+                    }
+                    match protocol::layout::parse_json(&json) {
+                        Ok(keys) => {
+                            let _ = tx.send(BgMsg::LayoutJson(keys));
+                        }
+                        Err(e) => eprintln!("Layout parse error: {}", e),
+                    }
+                }
+                // Pas de layout : le profil garde ses valeurs par défaut, et la
+                // keymap se parsera avec elles. Un dongle répond ERR_UNKNOWN ici.
+                Err(e) => eprintln!("get_layout_json error: {}", e),
+            }
+
+            let _ = tx.send(BgMsg::Profile(ser.profile.clone()));
+
             let names = ser.get_layer_names().unwrap_or_default();
             let km = ser.get_keymap(0).unwrap_or_default();
             let _ = tx.send(BgMsg::Connected(port_name, fw, names, km));
-
-            match ser.get_layout_json() {
-                Ok(json) => match protocol::layout::parse_json(&json) {
-                    Ok(keys) => {
-                        let _ = tx.send(BgMsg::LayoutJson(keys));
-                    }
-                    Err(e) => eprintln!("Layout parse error: {}", e),
-                },
-                Err(e) => eprintln!("get_layout_json error: {}", e),
-            }
         }
         Err(e) => {
             let _ = tx.send(BgMsg::ConnectError(e));

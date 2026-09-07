@@ -65,6 +65,8 @@ pub enum BgMsg {
     // Dongle / wireless (RF_STATUS / RF_PAIR_LIST / BATTERY per CDC_DONGLE_INTEGRATION.md)
     RfModeChanged(bool),                 // true = dongle detected (FEATURES tag RF_DONGLE)
     ConnectionMode(crate::protocol::connection::ConnectionKind), // connection topology at connect time
+    /// Ce que l'appareil a déclaré de lui-même : géométrie, nom, capacités.
+    Profile(crate::protocol::device::DeviceProfile),
     RfStatus(parsers::RfStatus),
     RfPairList(parsers::PairList),
     Battery(parsers::Battery),
