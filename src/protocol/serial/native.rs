@@ -51,6 +51,48 @@ pub fn port_label(product: &str, port_name: &str) -> String {
     }
 }
 
+/// Traduire une réponse KEYMAP_GET en résultat : `ERR_UNKNOWN` devient
+/// `Unsupported` (l'appareil ne fait pas ça — un dongle sans moteur keymap,
+/// par exemple), tout autre statut non-OK devient `Failed`, et seul `OK`
+/// atteint le parsing du payload. Pure — aucun I/O — donc testable sans port
+/// série : c'est l'oracle qui aurait attrapé un appelant qui construit ce
+/// mapping mais ne l'atteint jamais (ex. un `send_binary` qui aurait déjà
+/// écrasé le statut avant que ce code ne le voie).
+fn keymap_result(resp: &KrResponse, rows: usize) -> Result<Vec<Vec<u16>>, bp::CmdError> {
+    if resp.is_unsupported() {
+        return Err(bp::CmdError::Unsupported);
+    }
+    if !resp.is_ok() {
+        return Err(bp::CmdError::Failed(format!(
+            "Firmware error: {}",
+            resp.status_name()
+        )));
+    }
+    parsers::parse_keymap(&resp.payload, rows).map_err(bp::CmdError::Failed)
+}
+
+/// Traduire une réponse GET_LAYOUT_JSON en résultat, même logique que
+/// `keymap_result` : `ERR_UNKNOWN` devient `Unsupported`, tout autre statut
+/// non-OK devient `Failed`. Sur `OK`, un payload vide rend `Ok(None)` — ce
+/// n'est pas une erreur, c'est le signal qu'il faut retenter en legacy texte
+/// (l'appelant reste seul juge de ce fallback). Pure, testable sans port
+/// série.
+fn layout_json_result(resp: &KrResponse) -> Result<Option<String>, bp::CmdError> {
+    if resp.is_unsupported() {
+        return Err(bp::CmdError::Unsupported);
+    }
+    if !resp.is_ok() {
+        return Err(bp::CmdError::Failed(format!(
+            "Firmware error: {}",
+            resp.status_name()
+        )));
+    }
+    if resp.payload.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(String::from_utf8_lossy(&resp.payload).to_string()))
+}
+
 pub struct SerialManager {
     port: Option<Box<dyn SerialPort>>,
     pub port_name: String,
@@ -456,17 +498,7 @@ impl SerialManager {
             let resp = self
                 .send_binary_raw(bp::cmd::KEYMAP_GET, &[layer])
                 .map_err(bp::CmdError::Failed)?;
-            if resp.is_unsupported() {
-                return Err(bp::CmdError::Unsupported);
-            }
-            if !resp.is_ok() {
-                return Err(bp::CmdError::Failed(format!(
-                    "Firmware error: {}",
-                    resp.status_name()
-                )));
-            }
-            return parsers::parse_keymap(&resp.payload, self.profile.rows)
-                .map_err(bp::CmdError::Failed);
+            return keymap_result(&resp, self.profile.rows);
         }
 
         // Legacy
@@ -594,16 +626,10 @@ impl SerialManager {
             let resp = self
                 .send_binary_raw(bp::cmd::GET_LAYOUT_JSON, &[])
                 .map_err(bp::CmdError::Failed)?;
-            if resp.is_unsupported() {
-                return Err(bp::CmdError::Unsupported);
-            }
-            let has_payload = resp.is_ok() && !resp.payload.is_empty();
-            if has_payload {
-                let raw_bytes = &resp.payload;
-                let lossy_string = String::from_utf8_lossy(raw_bytes);
-                let json = lossy_string.to_string();
+            if let Some(json) = layout_json_result(&resp)? {
                 return Ok(json);
             }
+            // Ok(None) : payload vide sur statut OK — on retente en legacy.
         }
 
         // Legacy: text brace-counting
@@ -745,5 +771,76 @@ mod usb_match_tests {
         // « Dongle » est générique, il ne doit désigner personne à lui seul.
         assert!(!is_family_product("2.4G Wireless Dongle", 0x046D));
         assert!(!is_family_product("USB Bluetooth Dongle", 0x0A12));
+    }
+}
+
+/// Tests de la traduction pure `KrResponse -> Result<_, CmdError>`. Aucun
+/// port série : c'est l'oracle qui aurait attrapé le bug repéré en review
+/// (`get_layout_json` retombait en legacy texte sur un statut d'erreur réel
+/// au lieu de rendre `Failed`) et qui aurait attrapé, en amont, le piège
+/// nommé dans le plan (le mapping vers `Unsupported` construit mais jamais
+/// atteint).
+#[cfg(test)]
+mod cmd_result_tests {
+    use super::*;
+    use crate::protocol::binary::status;
+
+    fn resp(status: u8, payload: Vec<u8>) -> KrResponse {
+        KrResponse { cmd: 0x13, status, payload }
+    }
+
+    #[test]
+    fn keymap_err_unknown_is_unsupported_not_failed() {
+        let r = keymap_result(&resp(status::ERR_UNKNOWN, vec![]), 1);
+        assert_eq!(r, Err(bp::CmdError::Unsupported));
+    }
+
+    #[test]
+    fn keymap_a_real_error_status_is_failed() {
+        let r = keymap_result(&resp(status::ERR_CRC, vec![]), 1);
+        assert!(matches!(r, Err(bp::CmdError::Failed(_))));
+        assert!(!r.unwrap_err().is_unsupported());
+    }
+
+    #[test]
+    fn keymap_ok_with_a_valid_payload_parses() {
+        // 1 rangée, 1 colonne : un u16 LE, keycode 0x0001.
+        let r = keymap_result(&resp(status::OK, vec![0x01, 0x00]), 1);
+        assert_eq!(r, Ok(vec![vec![1]]));
+    }
+
+    #[test]
+    fn keymap_ok_with_a_malformed_payload_is_failed_not_a_panic() {
+        // 2 rangées attendues, payload d'1 octet : pas un multiple de rows*2.
+        let r = keymap_result(&resp(status::OK, vec![0x01]), 2);
+        assert!(matches!(r, Err(bp::CmdError::Failed(_))));
+    }
+
+    #[test]
+    fn layout_json_err_unknown_is_unsupported_not_failed() {
+        let r = layout_json_result(&resp(status::ERR_UNKNOWN, vec![]));
+        assert_eq!(r, Err(bp::CmdError::Unsupported));
+    }
+
+    #[test]
+    fn layout_json_a_real_error_status_is_failed_not_a_silent_fallback() {
+        // Le bug de review : ERR_CRC / ERR_RANGE / etc. ne doit plus se
+        // comporter comme "pas de payload" et retomber en legacy silencieux.
+        for s in [status::ERR_CRC, status::ERR_INVALID, status::ERR_RANGE, status::ERR_BUSY, status::ERR_OVERFLOW] {
+            let r = layout_json_result(&resp(s, vec![]));
+            assert!(matches!(r, Err(bp::CmdError::Failed(_))), "status {:#x} devrait etre Failed", s);
+        }
+    }
+
+    #[test]
+    fn layout_json_ok_with_payload_returns_the_json() {
+        let r = layout_json_result(&resp(status::OK, b"{}".to_vec()));
+        assert_eq!(r, Ok(Some("{}".to_string())));
+    }
+
+    #[test]
+    fn layout_json_ok_with_empty_payload_signals_legacy_fallback() {
+        let r = layout_json_result(&resp(status::OK, vec![]));
+        assert_eq!(r, Ok(None));
     }
 }
