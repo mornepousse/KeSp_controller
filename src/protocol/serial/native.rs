@@ -372,8 +372,14 @@ impl SerialManager {
 
     // ==================== LOW-LEVEL: BINARY V2 ====================
 
-    /// Send a KS frame, read KR response.
-    pub fn send_binary(&mut self, cmd_id: u8, payload: &[u8]) -> Result<KrResponse, String> {
+    /// Send a KS frame, read the KR response, and hand back the response as-is
+    /// — even a non-OK status (`ERR_UNKNOWN` included). Only transport failures
+    /// (write, flush, timeout, unparseable frame, unreachable dongle peer) are
+    /// `Err`. Callers that need to distinguish "device says it can't do this"
+    /// from "something broke" (see `CmdError`) must use this instead of
+    /// `send_binary`, which collapses any non-OK status into an `Err` and so
+    /// destroys that distinction before the caller ever sees it.
+    pub fn send_binary_raw(&mut self, cmd_id: u8, payload: &[u8]) -> Result<KrResponse, String> {
         let frame = bp::ks_frame(cmd_id, payload);
         let port = self.port.as_mut().ok_or("Not connected")?;
 
@@ -402,6 +408,14 @@ impl SerialManager {
         }
 
         let (resp, _remaining) = bp::parse_kr(&raw)?;
+        Ok(resp)
+    }
+
+    /// Send a KS frame, read KR response. Any non-OK status (including
+    /// `ERR_UNKNOWN`) becomes an `Err` — use `send_binary_raw` when the
+    /// caller needs to tell "unsupported" apart from "failed".
+    pub fn send_binary(&mut self, cmd_id: u8, payload: &[u8]) -> Result<KrResponse, String> {
+        let resp = self.send_binary_raw(cmd_id, payload)?;
         let firmware_ok = resp.is_ok();
         if !firmware_ok {
             let status = resp.status_name();
@@ -436,27 +450,39 @@ impl SerialManager {
         line_iter.next()
     }
 
-    pub fn get_keymap(&mut self, layer: u8) -> Result<Vec<Vec<u16>>, String> {
+    pub fn get_keymap(&mut self, layer: u8) -> Result<Vec<Vec<u16>>, bp::CmdError> {
         // Try v2 binary first
         if self.v2 {
-            let resp = self.send_binary(bp::cmd::KEYMAP_GET, &[layer])?;
-            return parsers::parse_keymap(&resp.payload, self.profile.rows);
+            let resp = self
+                .send_binary_raw(bp::cmd::KEYMAP_GET, &[layer])
+                .map_err(bp::CmdError::Failed)?;
+            if resp.is_unsupported() {
+                return Err(bp::CmdError::Unsupported);
+            }
+            if !resp.is_ok() {
+                return Err(bp::CmdError::Failed(format!(
+                    "Firmware error: {}",
+                    resp.status_name()
+                )));
+            }
+            return parsers::parse_keymap(&resp.payload, self.profile.rows)
+                .map_err(bp::CmdError::Failed);
         }
 
         // Legacy
         let cmd = format!("KEYMAP{}", layer);
-        let (cmd_type, data) = self.query_legacy_binary(&cmd)?;
+        let (cmd_type, data) = self.query_legacy_binary(&cmd).map_err(bp::CmdError::Failed)?;
 
         if cmd_type != 1 {
-            return Err(format!("Unexpected cmd type: {}", cmd_type));
+            return Err(format!("Unexpected cmd type: {}", cmd_type).into());
         }
         if data.len() < 2 {
-            return Err("Data too short".into());
+            return Err("Data too short".to_string().into());
         }
 
         // skip 2-byte layer index in legacy
         let data_without_header = &data[2..];
-        parsers::parse_keymap(data_without_header, self.profile.rows)
+        parsers::parse_keymap(data_without_header, self.profile.rows).map_err(bp::CmdError::Failed)
     }
 
     pub fn get_layer_names(&mut self) -> Result<Vec<String>, String> {
@@ -562,11 +588,16 @@ impl SerialManager {
         }
     }
 
-    pub fn get_layout_json(&mut self) -> Result<String, String> {
+    pub fn get_layout_json(&mut self) -> Result<String, bp::CmdError> {
         // Try v2 binary first
         if self.v2 {
-            let resp = self.send_binary(bp::cmd::GET_LAYOUT_JSON, &[])?;
-            let has_payload = !resp.payload.is_empty();
+            let resp = self
+                .send_binary_raw(bp::cmd::GET_LAYOUT_JSON, &[])
+                .map_err(bp::CmdError::Failed)?;
+            if resp.is_unsupported() {
+                return Err(bp::CmdError::Unsupported);
+            }
+            let has_payload = resp.is_ok() && !resp.payload.is_empty();
             if has_payload {
                 let raw_bytes = &resp.payload;
                 let lossy_string = String::from_utf8_lossy(raw_bytes);
@@ -576,7 +607,7 @@ impl SerialManager {
         }
 
         // Legacy: text brace-counting
-        self.send_command("LAYOUT?")?;
+        self.send_command("LAYOUT?").map_err(bp::CmdError::Failed)?;
         std::thread::sleep(Duration::from_millis(LEGACY_BINARY_SETTLE_MS));
 
         let json_timeout_ms = crate::protocol::connection::read_timeout_ms(
@@ -584,7 +615,7 @@ impl SerialManager {
             self.connection_kind,
             JSON_TIMEOUT_SECS * 1000,
         );
-        let port = self.port.as_mut().ok_or("Not connected")?;
+        let port = self.port.as_mut().ok_or("Not connected".to_string())?;
         let mut result = String::new();
         let mut buf = [0u8; 4096];
         let start = Instant::now();
@@ -629,9 +660,9 @@ impl SerialManager {
 
         let got_nothing = result.is_empty();
         if got_nothing {
-            Err("No JSON".into())
+            Err("No JSON".to_string().into())
         } else {
-            Err("Incomplete JSON".into())
+            Err("Incomplete JSON".to_string().into())
         }
     }
 }

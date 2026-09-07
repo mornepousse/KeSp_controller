@@ -233,6 +233,39 @@ pub fn rf_pair_start_payload(reset: bool) -> Vec<u8> {
     vec![if reset { 1 } else { 0 }]
 }
 
+/// Échec d'une commande v2. Un appareil qui n'implémente pas une commande n'est
+/// pas en panne : le dongle du Niphargus répond `ERR_UNKNOWN` à toute commande
+/// keymap parce qu'il n'a pas de moteur keymap. L'appelant grise la fonction au
+/// lieu d'afficher une erreur.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CmdError {
+    /// L'appareil n'implémente pas cette commande (`ERR_UNKNOWN`).
+    Unsupported,
+    /// Tout le reste : transport, CRC, statut d'erreur réel.
+    Failed(String),
+}
+
+impl CmdError {
+    pub fn is_unsupported(&self) -> bool {
+        matches!(self, CmdError::Unsupported)
+    }
+}
+
+impl std::fmt::Display for CmdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CmdError::Unsupported => write!(f, "commande non supportee par cet appareil"),
+            CmdError::Failed(m) => write!(f, "{}", m),
+        }
+    }
+}
+
+impl From<String> for CmdError {
+    fn from(m: String) -> Self {
+        CmdError::Failed(m)
+    }
+}
+
 /// Parsed KR response.
 #[derive(Debug)]
 pub struct KrResponse {
@@ -351,5 +384,44 @@ mod tests {
         let r = KrResponse { cmd: 0x13, status: status::OK, payload: vec![] };
         assert!(r.is_ok());
         assert!(!r.is_unsupported());
+    }
+
+    #[test]
+    fn an_unsupported_command_reads_as_a_capability_not_an_error() {
+        let e = CmdError::Unsupported;
+        assert_eq!(e.to_string(), "commande non supportee par cet appareil");
+        assert!(e.is_unsupported());
+    }
+
+    #[test]
+    fn a_failed_command_carries_its_reason() {
+        let e = CmdError::Failed("timeout".to_string());
+        assert_eq!(e.to_string(), "timeout");
+        assert!(!e.is_unsupported());
+    }
+
+    // Le piège nommé dans le plan : un `is_unsupported()` qui répond vrai pour
+    // les deux variantes rendrait `a_failed_command_carries_its_reason`
+    // rouge (elle asserte `!e.is_unsupported()` sur un `Failed`).
+    #[test]
+    fn unsupported_and_failed_are_distinguishable_by_is_unsupported() {
+        assert!(CmdError::Unsupported.is_unsupported());
+        assert!(!CmdError::Failed("x".to_string()).is_unsupported());
+    }
+
+    // Le piège nommé dans le plan : un `Display` qui imprime la même chaîne
+    // pour les deux variantes rendrait ce test rouge.
+    #[test]
+    fn display_differs_between_unsupported_and_failed() {
+        assert_ne!(CmdError::Unsupported.to_string(), CmdError::Failed("timeout".to_string()).to_string());
+    }
+
+    // Le piège nommé dans le plan : un `From<String>` qui mappe vers
+    // `Unsupported` au lieu de `Failed` rendrait ce test rouge.
+    #[test]
+    fn from_string_produces_failed_not_unsupported() {
+        let e: CmdError = "boom".to_string().into();
+        assert_eq!(e, CmdError::Failed("boom".to_string()));
+        assert!(!e.is_unsupported());
     }
 }

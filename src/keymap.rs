@@ -59,7 +59,7 @@ pub fn setup(window: &MainWindow, ctx: &AppContext) {
                 let mut ser = serial.lock().unwrap_or_else(|e| e.into_inner());
                 match ser.get_keymap(idx as u8) {
                     Ok(km) => { let _ = tx.send(BgMsg::Keymap(km)); }
-                    Err(e) => { let _ = tx.send(BgMsg::ConnectError(e)); }
+                    Err(e) => { let _ = tx.send(BgMsg::ConnectError(e.to_string())); }
                 }
             });
         });

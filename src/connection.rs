@@ -44,6 +44,9 @@ fn connect_and_load(ser: &mut SerialManager, tx: &mpsc::Sender<BgMsg>, port: Opt
                 }
                 // Pas de layout : le profil garde ses valeurs par défaut, et la
                 // keymap se parsera avec elles. Un dongle répond ERR_UNKNOWN ici.
+                Err(e) if e.is_unsupported() => {
+                    // Un dongle n'a pas de layout : ce n'est pas une erreur.
+                }
                 Err(e) => eprintln!("get_layout_json error: {}", e),
             }
 
@@ -52,6 +55,10 @@ fn connect_and_load(ser: &mut SerialManager, tx: &mpsc::Sender<BgMsg>, port: Opt
             let names = ser.get_layer_names().unwrap_or_default();
             let km = match ser.get_keymap(0) {
                 Ok(km) => km,
+                Err(e) if e.is_unsupported() => {
+                    // Un dongle n'a pas de moteur keymap : ce n'est pas une erreur.
+                    Vec::new()
+                }
                 Err(e) => {
                     eprintln!(
                         "get_keymap error (geometrie {}x{}): {}",
