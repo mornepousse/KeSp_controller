@@ -51,6 +51,23 @@ pub fn parse_features_csv(csv: &str) -> BTreeSet<String> {
         .collect()
 }
 
+/// Résoudre (rangées, colonnes) depuis ce que l'appareil a offert, de la source
+/// la plus fiable à la moins fiable : layout JSON, puis en-tête `KEYSTATS_BIN`,
+/// puis les valeurs par défaut. Une dimension nulle est un non-dit, pas une
+/// réponse : on passe à la source suivante.
+pub fn resolve_geometry(
+    layout: Option<(usize, usize)>,
+    keystats: Option<(usize, usize)>,
+) -> (usize, usize) {
+    fn valid(g: &(usize, usize)) -> bool {
+        g.0 > 0 && g.1 > 0
+    }
+    layout
+        .filter(valid)
+        .or_else(|| keystats.filter(valid))
+        .unwrap_or((DEFAULT_ROWS, DEFAULT_COLS))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,5 +102,26 @@ mod tests {
         };
         assert!(p.has("RF_DONGLE"));
         assert!(!p.has("TAP_DANCE"));
+    }
+
+    #[test]
+    fn geometry_prefers_the_layout_over_keystats() {
+        assert_eq!(resolve_geometry(Some((4, 7)), Some((5, 13))), (4, 7));
+    }
+
+    #[test]
+    fn geometry_falls_back_to_keystats_when_layout_is_silent() {
+        assert_eq!(resolve_geometry(None, Some((5, 14))), (5, 14));
+    }
+
+    #[test]
+    fn geometry_falls_back_to_default_when_nothing_is_known() {
+        assert_eq!(resolve_geometry(None, None), (DEFAULT_ROWS, DEFAULT_COLS));
+    }
+
+    #[test]
+    fn geometry_rejects_zero_dimensions_and_tries_the_next_source() {
+        assert_eq!(resolve_geometry(Some((0, 7)), Some((5, 13))), (5, 13));
+        assert_eq!(resolve_geometry(Some((4, 0)), None), (DEFAULT_ROWS, DEFAULT_COLS));
     }
 }
