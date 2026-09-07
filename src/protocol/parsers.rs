@@ -1087,6 +1087,10 @@ mod tests {
 
     #[test]
     fn keymap_rejects_zero_rows() {
-        assert!(parse_keymap(&[0u8; 8], 0).is_err());
+        // 130 octets = 5*13*2, une keymap 5x13 parfaitement valide. Une
+        // implémentation qui retomberait silencieusement sur DEFAULT_ROWS
+        // la parserait sans broncher ; rows == 0 doit être rejeté avant
+        // toute division.
+        assert!(parse_keymap(&[0u8; 130], 0).is_err());
     }
 }
