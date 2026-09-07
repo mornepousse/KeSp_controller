@@ -474,4 +474,23 @@ mod row_label_tests {
         assert!((usage[0].pct - 10.0).abs() < 0.01, "pct[0] = {}", usage[0].pct);
         assert!((usage[3].pct - 40.0).abs() < 0.01, "pct[3] = {}", usage[3].pct);
     }
+
+    #[test]
+    fn row_usage_on_five_rows_keeps_the_historical_kase_output() {
+        // Forme du KaSe filaire : 5 rangées × 13 colonnes, valeurs 1..5 par
+        // rangée -> sommes 13/26/39/52/65, total 195.
+        let heatmap: Vec<Vec<u32>> = (1..=5).map(|v| vec![v as u32; 13]).collect();
+        let usage = row_usage(&heatmap);
+
+        assert_eq!(usage.len(), 5);
+        let names: Vec<&str> = usage.iter().map(|u| u.name.as_str()).collect();
+        assert_eq!(names, vec!["Number", "Upper", "Home", "Lower", "Thumb"]);
+
+        assert_eq!(usage[0].count, 13);
+        assert_eq!(usage[4].count, 65);
+
+        // 13/195 = 6.667 %, 65/195 = 33.333 %
+        assert!((usage[0].pct - 6.6667).abs() < 0.01, "pct[0] = {}", usage[0].pct);
+        assert!((usage[4].pct - 33.3333).abs() < 0.01, "pct[4] = {}", usage[4].pct);
+    }
 }
