@@ -16,11 +16,8 @@ pub const UNIT_PX: f32 = 50.0; // 1u = 50 pixels
 
 #[derive(Deserialize)]
 struct LayoutJson {
-    #[allow(dead_code)]
     name: Option<String>,
-    #[allow(dead_code)]
     rows: Option<usize>,
-    #[allow(dead_code)]
     cols: Option<usize>,
     #[serde(default)]
     keys: Vec<KeyJson>,
@@ -130,4 +127,53 @@ fn round2(v: f32) -> f32 {
 pub fn default_layout() -> Vec<KeycapPos> {
     let json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/default.json"));
     parse_json(json).unwrap_or_default()
+}
+
+/// Géométrie déclarée par le layout de l'appareil, quand il en déclare une.
+/// Une dimension nulle est traitée comme absente.
+pub fn parse_geometry(json: &str) -> Option<(usize, usize)> {
+    let layout: LayoutJson = serde_json::from_str(json).ok()?;
+    match (layout.rows, layout.cols) {
+        (Some(r), Some(c)) if r > 0 && c > 0 => Some((r, c)),
+        _ => None,
+    }
+}
+
+/// Nom déclaré par le layout de l'appareil. C'est la seule source qui dit de
+/// quelle main est une demi-matrice — la géométrie ne le dit pas.
+pub fn parse_name(json: &str) -> Option<String> {
+    let layout: LayoutJson = serde_json::from_str(json).ok()?;
+    layout.name.filter(|n| !n.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NIPHAR: &str = r#"{"name":"Niphargus Left","rows":4,"cols":7,"keys":[]}"#;
+
+    #[test]
+    fn geometry_is_read_from_the_layout_json() {
+        assert_eq!(parse_geometry(NIPHAR), Some((4, 7)));
+    }
+
+    #[test]
+    fn geometry_is_none_when_the_layout_omits_it() {
+        assert_eq!(parse_geometry(r#"{"keys":[]}"#), None);
+    }
+
+    #[test]
+    fn geometry_is_none_on_invalid_json() {
+        assert_eq!(parse_geometry("not json"), None);
+    }
+
+    #[test]
+    fn name_is_read_from_the_layout_json() {
+        assert_eq!(parse_name(NIPHAR), Some("Niphargus Left".to_string()));
+    }
+
+    #[test]
+    fn empty_name_counts_as_absent() {
+        assert_eq!(parse_name(r#"{"name":"","keys":[]}"#), None);
+    }
 }
