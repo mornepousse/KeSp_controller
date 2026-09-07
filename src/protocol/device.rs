@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn geometry_rejects_zero_dimensions_and_tries_the_next_source() {
-        assert_eq!(resolve_geometry(Some((0, 7)), Some((5, 13))), (5, 13));
+        assert_eq!(resolve_geometry(Some((0, 7)), Some((5, 14))), (5, 14));
         assert_eq!(resolve_geometry(Some((4, 0)), None), (DEFAULT_ROWS, DEFAULT_COLS));
     }
 }
