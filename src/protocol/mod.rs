@@ -4,6 +4,8 @@ pub mod config_io;
 #[allow(dead_code)]
 pub mod connection;
 #[allow(dead_code)]
+pub mod device;
+#[allow(dead_code)]
 pub mod flasher;
 #[allow(dead_code)]
 pub mod keycode;
