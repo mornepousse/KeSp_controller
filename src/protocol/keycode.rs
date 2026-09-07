@@ -9,19 +9,19 @@ pub fn decode_keycode(raw: u16) -> String {
     }
 
     // --- MO (Momentary Layer): 0x0100..=0x0A00, low byte == 0 ---
-    if raw >= 0x0100 && raw <= 0x0A00 && (raw & 0xFF) == 0 {
+    if (0x0100..=0x0A00).contains(&raw) && (raw & 0xFF) == 0 {
         let layer = (raw >> 8) - 1;
         return format!("MO {layer}");
     }
 
     // --- TO (Toggle Layer): 0x0B00..=0x1400, low byte == 0 ---
-    if raw >= 0x0B00 && raw <= 0x1400 && (raw & 0xFF) == 0 {
+    if (0x0B00..=0x1400).contains(&raw) && (raw & 0xFF) == 0 {
         let layer = (raw >> 8) - 0x0B;
         return format!("TO {layer}");
     }
 
     // --- MACRO: 0x1500..=0x2800, low byte == 0 ---
-    if raw >= 0x1500 && raw <= 0x2800 && (raw & 0xFF) == 0 {
+    if (0x1500..=0x2800).contains(&raw) && (raw & 0xFF) == 0 {
         let idx = (raw >> 8) - 0x15;
         return format!("M{idx}");
     }
@@ -38,13 +38,13 @@ pub fn decode_keycode(raw: u16) -> String {
     }
 
     // --- OSM (One-Shot Mod): 0x3000..=0x30FF ---
-    if raw >= 0x3000 && raw <= 0x30FF {
+    if (0x3000..=0x30FF).contains(&raw) {
         let mods = (raw & 0xFF) as u8;
         return format!("OSM {}", mod_name(mods));
     }
 
     // --- OSL (One-Shot Layer): 0x3100..=0x310F ---
-    if raw >= 0x3100 && raw <= 0x310F {
+    if (0x3100..=0x310F).contains(&raw) {
         let layer = raw & 0x0F;
         return format!("OSL {layer}");
     }
@@ -65,14 +65,14 @@ pub fn decode_keycode(raw: u16) -> String {
     }
 
     // --- KO (Key Override) slots: 0x3D00..=0x3DFF ---
-    if raw >= 0x3D00 && raw <= 0x3DFF {
+    if (0x3D00..=0x3DFF).contains(&raw) {
         let slot = raw & 0xFF;
         return format!("KO {slot}");
     }
 
     // --- LT (Layer-Tap): 0x4000..=0x4FFF ---
     //     layout: 0x4LKK  where L = layer (0..F), KK = HID keycode
-    if raw >= 0x4000 && raw <= 0x4FFF {
+    if (0x4000..=0x4FFF).contains(&raw) {
         let layer = (raw >> 8) & 0x0F;
         let kc = (raw & 0xFF) as u8;
         return format!("LT {} {}", layer, hid_key_name(kc));
@@ -80,14 +80,14 @@ pub fn decode_keycode(raw: u16) -> String {
 
     // --- MT (Mod-Tap): 0x5000..=0x5FFF ---
     //     layout: 0x5MKK  where M = mod nibble (4 bits), KK = HID keycode
-    if raw >= 0x5000 && raw <= 0x5FFF {
+    if (0x5000..=0x5FFF).contains(&raw) {
         let mods = ((raw >> 8) & 0x0F) as u8;
         let kc = (raw & 0xFF) as u8;
         return format!("MT {} {}", mod_name(mods), hid_key_name(kc));
     }
 
     // --- TD (Tap Dance): 0x6000..=0x6FFF ---
-    if raw >= 0x6000 && raw <= 0x6FFF {
+    if (0x6000..=0x6FFF).contains(&raw) {
         let index = (raw >> 8) & 0x0F;
         return format!("TD {index}");
     }

@@ -1,6 +1,6 @@
-/// Serial communication module.
-/// Dispatches to native (serialport crate) or web (WebSerial API)
-/// depending on the target architecture.
+//! Serial communication module.
+//! Dispatches to native (serialport crate) or web (WebSerial API)
+//! depending on the target architecture.
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native;

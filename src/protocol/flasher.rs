@@ -1,9 +1,9 @@
-/// ESP32 ROM bootloader flasher via serial (CH340/CP2102 programming port).
-/// Implements minimal SLIP-framed bootloader protocol for firmware flashing
-/// without requiring esptool.
-///
-/// Targets the ESP32-S3 ROM bootloader directly (no stub loader upload).
-/// Reference: esptool.py source, ESP32-S3 Technical Reference Manual.
+//! ESP32 ROM bootloader flasher via serial (CH340/CP2102 programming port).
+//! Implements minimal SLIP-framed bootloader protocol for firmware flashing
+//! without requiring esptool.
+//!
+//! Targets the ESP32-S3 ROM bootloader directly (no stub loader upload).
+//! Reference: esptool.py source, ESP32-S3 Technical Reference Manual.
 
 #[cfg(not(target_arch = "wasm32"))]
 use serialport::SerialPort;
@@ -352,7 +352,7 @@ fn flash_begin(
     total_size: u32,
     block_size: u32,
 ) -> Result<(), String> {
-    let num_blocks = (total_size + block_size - 1) / block_size;
+    let num_blocks = total_size.div_ceil(block_size);
 
     // erase_size must align to sector boundary (4 KB).
     // Passing raw file size causes the ROM to skip erasing the last partial sector.
@@ -614,7 +614,7 @@ pub fn flash_firmware(
     // ------------------------------------------------------------------ //
     // Step 6: FLASH_BEGIN (erases the target region)                       //
     // ------------------------------------------------------------------ //
-    let num_blocks = (total_size + FLASH_BLOCK_SIZE - 1) / FLASH_BLOCK_SIZE;
+    let num_blocks = total_size.div_ceil(FLASH_BLOCK_SIZE);
     send_progress(0.08, format!("Erasing flash region ({} KB at 0x{:X})...", total_size / 1024, offset));
     flash_begin(&mut port, offset, total_size, FLASH_BLOCK_SIZE)?;
     send_progress(0.10, "Flash erased, writing...".into());
@@ -627,7 +627,7 @@ pub fn flash_firmware(
         let mut block = chunk.to_vec();
         let pad_needed = FLASH_BLOCK_SIZE as usize - block.len();
         if pad_needed > 0 {
-            block.extend(std::iter::repeat(0xFF).take(pad_needed));
+            block.extend(std::iter::repeat_n(0xFF, pad_needed));
         }
 
         flash_data(&mut port, i as u32, &block)?;
@@ -658,7 +658,7 @@ pub fn flash_firmware(
         const OTADATA_SIZE: u32 = 0x2000; // 8 KB
         flash_begin(&mut port, OTADATA_OFFSET, OTADATA_SIZE, FLASH_BLOCK_SIZE)?;
         let empty_block = vec![0xFFu8; FLASH_BLOCK_SIZE as usize];
-        let otadata_blocks = (OTADATA_SIZE + FLASH_BLOCK_SIZE - 1) / FLASH_BLOCK_SIZE;
+        let otadata_blocks = OTADATA_SIZE.div_ceil(FLASH_BLOCK_SIZE);
         for i in 0..otadata_blocks {
             flash_data(&mut port, i, &empty_block)?;
         }
@@ -932,7 +932,7 @@ mod tests {
     #[test]
     fn firmware_padding_to_4_bytes() {
         // Firmware of odd length must be padded to 4-byte boundary with 0xFF
-        let fw = vec![0xE9u8; 5]; // 5 bytes, not aligned
+        let fw = [0xE9u8; 5]; // 5 bytes, not aligned
         let padded_len = (fw.len() as u32 + 3) & !3;
         assert_eq!(padded_len, 8);
     }

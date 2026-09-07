@@ -1,5 +1,5 @@
-/// Stats analysis: hand balance, finger load, row usage, top keys, bigrams.
-/// Transforms raw heatmap data into structured analysis for the stats tab.
+//! Stats analysis: hand balance, finger load, row usage, top keys, bigrams.
+//! Transforms raw heatmap data into structured analysis for the stats tab.
 
 use super::keycode;
 use super::parsers::ROWS;
@@ -183,7 +183,7 @@ pub fn top_keys(heatmap: &[Vec<u32>], keymap: &[Vec<u16>], n: usize) -> Vec<TopK
         }
     }
 
-    all_keys.sort_by(|a, b| b.0.cmp(&a.0));
+    all_keys.sort_by_key(|a| std::cmp::Reverse(a.0));
     all_keys.truncate(n);
 
     let total: u32 = heatmap.iter().flat_map(|r| r.iter()).sum();

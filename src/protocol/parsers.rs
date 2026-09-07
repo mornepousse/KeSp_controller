@@ -1,5 +1,5 @@
-/// Parsing functions for firmware text and binary responses.
-/// Separated for testability.
+//! Parsing functions for firmware text and binary responses.
+//! Separated for testability.
 
 /// Keyboard row count — 5 on every KaSe variant. The column count varies
 /// (13 wired, 14 dongle) and is deduced from the payload at parse time
@@ -19,7 +19,7 @@ pub fn parse_keymap(data: &[u8]) -> Result<Vec<Vec<u16>>, String> {
     let offset = usize::from(has_layer_byte);
     let kc = &data[offset..];
 
-    if kc.len() < ROWS * 2 || kc.len() % (ROWS * 2) != 0 {
+    if kc.len() < ROWS * 2 || !kc.len().is_multiple_of(ROWS * 2) {
         return Err(format!(
             "Keymap data not a {}-row multiple: {} bytes",
             ROWS,
@@ -223,14 +223,8 @@ fn parse_rc(s: &str) -> Option<(u8, u8)> {
     let r_pos = lower.find('r');
     let c_pos = lower.find('c');
 
-    let r_idx = match r_pos {
-        Some(i) => i,
-        None => return None,
-    };
-    let c_idx = match c_pos {
-        Some(i) => i,
-        None => return None,
-    };
+    let r_idx = r_pos?;
+    let c_idx = c_pos?;
 
     let row_str = &lower[r_idx + 1..c_idx];
     let col_str = &lower[c_idx + 1..];
@@ -867,6 +861,8 @@ pub fn parse_keystats_binary(payload: &[u8]) -> (Vec<Vec<u32>>, u32) {
     let mut max_value = 0u32;
     let mut offset = 2;
 
+    // row/col index `data` for writing while `offset` walks the payload — enumerate doesn't fit.
+    #[allow(clippy::needless_range_loop)]
     for row in 0..rows {
         for col in 0..cols {
             let count = u32::from_le_bytes([
@@ -1045,6 +1041,7 @@ mod tests {
         assert_eq!(km.len(), ROWS);
         assert_eq!(km[0].len(), 14, "dongle must parse 14 cols");
         // Every cell must equal r*14+c — a hardcoded 13-col reader shifts rows.
+        #[allow(clippy::needless_range_loop)]
         for r in 0..ROWS {
             for c in 0..14 {
                 assert_eq!(km[r][c], (r * 14 + c) as u16, "mismatch at {r},{c}");

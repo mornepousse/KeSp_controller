@@ -52,34 +52,28 @@ pub fn fetch_pair_list(serial: &mut SerialManager, tx: &mpsc::Sender<BgMsg>) {
     if !serial.connected {
         return;
     }
-    match serial.send_binary(binary::cmd::RF_PAIR_LIST, &[]) {
-        Ok(resp) => match parsers::parse_pair_list(&resp.payload) {
-            Ok(p) => {
-                let _ = tx.send(BgMsg::RfPairList(p));
-            }
-            Err(e) => {
-                let _ = tx.send(BgMsg::StatusError(format!("RF_PAIR_LIST parse: {}", e)));
-            }
-        },
-        Err(_) => {}
-    }
+    if let Ok(resp) = serial.send_binary(binary::cmd::RF_PAIR_LIST, &[]) { match parsers::parse_pair_list(&resp.payload) {
+        Ok(p) => {
+            let _ = tx.send(BgMsg::RfPairList(p));
+        }
+        Err(e) => {
+            let _ = tx.send(BgMsg::StatusError(format!("RF_PAIR_LIST parse: {}", e)));
+        }
+    } }
 }
 
 pub fn fetch_battery(serial: &mut SerialManager, tx: &mpsc::Sender<BgMsg>) {
     if !serial.connected {
         return;
     }
-    match serial.send_binary(binary::cmd::BATTERY, &[]) {
-        Ok(resp) => match parsers::parse_battery(&resp.payload) {
-            Ok(b) => {
-                let _ = tx.send(BgMsg::Battery(b));
-            }
-            Err(e) => {
-                let _ = tx.send(BgMsg::StatusError(format!("BATTERY parse: {}", e)));
-            }
-        },
-        Err(_) => {}
-    }
+    if let Ok(resp) = serial.send_binary(binary::cmd::BATTERY, &[]) { match parsers::parse_battery(&resp.payload) {
+        Ok(b) => {
+            let _ = tx.send(BgMsg::Battery(b));
+        }
+        Err(e) => {
+            let _ = tx.send(BgMsg::StatusError(format!("BATTERY parse: {}", e)));
+        }
+    } }
 }
 
 // =============================================================================

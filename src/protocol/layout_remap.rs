@@ -1,5 +1,5 @@
-/// Remaps HID key names to their visual representation based on the user's
-/// keyboard layout (language).  Ported from the C# `KeyConverter.LayoutOverrides`.
+//! Remaps HID key names to their visual representation based on the user's
+//! keyboard layout (language).  Ported from the C# `KeyConverter.LayoutOverrides`.
 
 // Display implementation for the keyboard layout picker in settings.
 impl std::fmt::Display for KeyboardLayout {

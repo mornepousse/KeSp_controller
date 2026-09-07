@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-/// CDC protocol command helpers for KaSe keyboard firmware.
+//! CDC protocol command helpers for KaSe keyboard firmware.
 
 // Text-based query commands
 pub const CMD_TAP_DANCE: &str = "TD?";

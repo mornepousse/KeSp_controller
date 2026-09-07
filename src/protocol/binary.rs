@@ -1,6 +1,6 @@
-/// KaSe Binary CDC Protocol v2
-/// Frame: KS(2) + cmd(1) + len(2 LE) + payload(N) + crc8(1)
-/// Response: KR(2) + cmd(1) + status(1) + len(2 LE) + payload(N) + crc8(1)
+//! KaSe Binary CDC Protocol v2
+//! Frame: KS(2) + cmd(1) + len(2 LE) + payload(N) + crc8(1)
+//! Response: KR(2) + cmd(1) + status(1) + len(2 LE) + payload(N) + crc8(1)
 
 #[allow(dead_code)]
 pub mod cmd {
