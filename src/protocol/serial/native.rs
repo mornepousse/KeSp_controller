@@ -14,6 +14,29 @@ const LEGACY_BINARY_SETTLE_MS: u64 = 50;
 const BINARY_SETTLE_MS: u64 = 30;
 const JSON_TIMEOUT_SECS: u64 = 3;
 
+/// Fragments de chaîne produit qui marquent un appareil comme étant des nôtres.
+const FAMILY_PRODUCTS: [&str; 4] = ["KaSe", "KeSp", "Niphargus", "Dongle"];
+
+/// Cet appareil USB est-il des nôtres ?
+///
+/// On matche sur notre VID propre ou sur un fragment de nom produit — jamais sur
+/// le VID Espressif seul : il est partagé avec la souris Conchodytes, qui n'est
+/// pas un clavier.
+pub fn is_family_product(product: &str, vid: u16) -> bool {
+    const KEYBOARD_VID: u16 = 0xCAFE;
+    vid == KEYBOARD_VID || FAMILY_PRODUCTS.iter().any(|p| product.contains(p))
+}
+
+/// Libellé d'un port dans la liste déroulante : le nom que l'appareil rapporte,
+/// pas un nom de famille codé en dur.
+pub fn port_label(product: &str, port_name: &str) -> String {
+    if product.is_empty() {
+        format!("Keyboard ({})", port_name)
+    } else {
+        format!("{} ({})", product, port_name)
+    }
+}
+
 pub struct SerialManager {
     port: Option<Box<dyn SerialPort>>,
     pub port_name: String,
@@ -117,26 +140,22 @@ impl SerialManager {
         Ok(port_name)
     }
 
-    /// Custom USB VID for the wired keyboard ("KaSe V2 Debug"); the dongle uses
-    /// Espressif's native-USB VID with a "KaSe Dongle" product string.
-    const KEYBOARD_VID: u16 = 0xCAFE;
-    const ESPRESSIF_VID: u16 = 0x303A;
-
-    /// Classify a serial port as a KaSe-family device. Returns (label, is_dongle).
+    /// Classify a serial port as one of our devices. Returns (label, is_dongle).
+    ///
+    /// C'est le SEUL matcher USB : `list_kase_ports` et `find_kase_port` passent
+    /// tous deux par ici, donc ils ne peuvent plus être en désaccord sur ce qui
+    /// est à nous — leur désaccord rendait le Niphargus listable mais
+    /// introuvable à l'auto-connect.
     fn classify_kase_port(port: &serialport::SerialPortInfo) -> Option<(String, bool)> {
         let serialport::SerialPortType::UsbPort(usb) = &port.port_type else {
             return None;
         };
         let product = usb.product.clone().unwrap_or_default();
-        let is_kase_family = usb.vid == Self::KEYBOARD_VID
-            || product.contains("KaSe")
-            || product.contains("KeSp");
-        if !is_kase_family {
+        if !is_family_product(&product, usb.vid) {
             return None;
         }
-        let is_dongle = product.contains("Dongle") || usb.vid == Self::ESPRESSIF_VID;
-        let kind = if is_dongle { "Dongle" } else { "Keyboard" };
-        Some((format!("KaSe {} ({})", kind, port.port_name), is_dongle))
+        let is_dongle = product.contains("Dongle");
+        Some((port_label(&product, &port.port_name), is_dongle))
     }
 
     /// List all connected KaSe-family ports as (path, label, is_dongle).
@@ -163,36 +182,21 @@ impl SerialManager {
     }
 
     pub fn find_kase_port() -> Result<String, String> {
-        const TARGET_VID: u16 = 0xCAFE;
-        const TARGET_PID: u16 = 0x4001;
-
         let available = serialport::available_ports();
         let ports = available.unwrap_or_default();
         if ports.is_empty() {
             return Err("No serial ports found".into());
         }
 
-        // First pass: check USB VID/PID and product name
+        // Premier passage : le même prédicat que la liste déroulante.
         for port in &ports {
-            let port_type = &port.port_type;
-            if let serialport::SerialPortType::UsbPort(usb) = port_type {
-                let vid_matches = usb.vid == TARGET_VID;
-                let pid_matches = usb.pid == TARGET_PID;
-                if vid_matches && pid_matches {
-                    return Ok(port.port_name.clone());
-                }
-
-                if let Some(product) = &usb.product {
-                    let is_kase = product.contains("KaSe");
-                    let is_kesp = product.contains("KeSp");
-                    if is_kase || is_kesp {
-                        return Ok(port.port_name.clone());
-                    }
-                }
+            if Self::classify_kase_port(port).is_some() {
+                return Ok(port.port_name.clone());
             }
         }
 
-        // Second pass (Linux only): check udevadm info
+        // Second passage (Linux) : certains ports n'exposent pas leur descripteur
+        // à serialport ; udevadm le voit quand même.
         #[cfg(target_os = "linux")]
         for port in &ports {
             let udevadm_result = std::process::Command::new("udevadm")
@@ -200,18 +204,15 @@ impl SerialManager {
                 .output();
 
             if let Ok(output) = udevadm_result {
-                let stdout_bytes = &output.stdout;
-                let text = String::from_utf8_lossy(stdout_bytes);
-                let has_kase = text.contains("KaSe");
-                let has_kesp = text.contains("KeSp");
-                if has_kase || has_kesp {
+                let text = String::from_utf8_lossy(&output.stdout);
+                if FAMILY_PRODUCTS.iter().any(|p| text.contains(p)) {
                     return Ok(port.port_name.clone());
                 }
             }
         }
 
         let scanned_count = ports.len();
-        Err(format!("No KaSe keyboard found ({} port(s) scanned)", scanned_count))
+        Err(format!("No keyboard found ({} port(s) scanned)", scanned_count))
     }
 
     pub fn port_mut(&mut self) -> Option<&mut Box<dyn SerialPort>> {
@@ -618,6 +619,52 @@ pub type SharedSerial = Arc<Mutex<SerialManager>>;
 pub fn new_shared() -> SharedSerial {
     let manager = SerialManager::new();
     let mutex = Mutex::new(manager);
-    
+
     Arc::new(mutex)
+}
+
+#[cfg(test)]
+mod usb_match_tests {
+    use super::*;
+
+    const KEYBOARD_VID: u16 = 0xCAFE;
+    const ESPRESSIF_VID: u16 = 0x303A;
+
+    #[test]
+    fn the_niphargus_halves_are_recognised_by_product_name() {
+        assert!(is_family_product("Niphargus Left", KEYBOARD_VID));
+        assert!(is_family_product("Niphargus Right", KEYBOARD_VID));
+    }
+
+    #[test]
+    fn the_kase_boards_and_the_dongle_stay_recognised() {
+        assert!(is_family_product("KaSe V2", KEYBOARD_VID));
+        assert!(is_family_product("KaSe V2 Debug", KEYBOARD_VID));
+        assert!(is_family_product("KaSe Dongle", ESPRESSIF_VID));
+    }
+
+    #[test]
+    fn an_unnamed_board_on_our_vid_is_still_ours() {
+        assert!(is_family_product("", KEYBOARD_VID));
+    }
+
+    #[test]
+    fn the_conchodytes_mouse_is_not_a_keyboard() {
+        assert!(!is_family_product("Conchodytes", ESPRESSIF_VID));
+    }
+
+    #[test]
+    fn a_random_serial_adapter_is_not_ours() {
+        assert!(!is_family_product("USB2.0-Serial", 0x1A86));
+    }
+
+    #[test]
+    fn the_label_uses_the_product_string_the_device_reports() {
+        assert_eq!(port_label("Niphargus Left", "/dev/ttyACM0"), "Niphargus Left (/dev/ttyACM0)");
+    }
+
+    #[test]
+    fn a_nameless_device_still_gets_a_usable_label() {
+        assert_eq!(port_label("", "/dev/ttyACM1"), "Keyboard (/dev/ttyACM1)");
+    }
 }
