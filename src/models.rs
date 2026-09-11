@@ -127,6 +127,17 @@ pub fn build_key_entries_with_layout(layout: &layout_remap::KeyboardLayout) -> R
     for code in 0x1Eu16..=0x27 { entries.push(hid_entry(code, "Number")); }
     for code in [0x28u16, 0x29, 0x2A, 0x2B, 0x2C] { entries.push(hid_entry(code, "Control")); }
     for code in 0x2Du16..=0x38 { entries.push(hid_entry(code, "Symbol")); }
+    // Shifted symbols as standalone keys — firmware MK 0x82xx = Shift + base
+    // key in one press, for boards without a number row. Named per OS layout
+    // (`!` on US, an honest `Shift+…` elsewhere); see layout_remap::shifted_label.
+    for base in [0x1Eu8, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+                 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38] {
+        entries.push(KeyEntry {
+            name: SharedString::from(layout_remap::shifted_label(layout, base)),
+            code: i32::from(0x8200u16 | u16::from(base)),
+            category: SharedString::from("Symbol"),
+        });
+    }
     for code in 0x3Au16..=0x45 { entries.push(hid_entry(code, "Function")); }
     for code in [0x46u16, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52] {
         entries.push(hid_entry(code, "Navigation"));

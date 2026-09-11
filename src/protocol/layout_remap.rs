@@ -353,3 +353,54 @@ pub fn remap_key_label(layout: &KeyboardLayout, hid_name: &str) -> Option<&'stat
         },
     }
 }
+
+/// Label for a Shift+base key (firmware MK 0x82xx) under `layout`.
+///
+/// On the US reference layout the shifted glyph is known and shown (`!`).
+/// Elsewhere the honest label is `Shift+<key>` with the key name remapped as
+/// usual — never a glyph we cannot vouch for: on AZERTY, Shift+0x1E yields
+/// `1`, not `!`, and we have no per-layout shifted table to say so.
+pub fn shifted_label(layout: &KeyboardLayout, base: u8) -> String {
+    let base_name = super::keycode::hid_key_name(base);
+    if matches!(layout, KeyboardLayout::Qwerty) {
+        if let Some(sym) = super::keycode::shifted_symbol_us(base) {
+            return sym.to_string();
+        }
+    }
+    let shown = remap_key_label(layout, &base_name)
+        .map(str::to_string)
+        .unwrap_or(base_name);
+    format!("Shift+{shown}")
+}
+
+#[cfg(test)]
+mod shifted_label_tests {
+    use super::*;
+
+    #[test]
+    fn qwerty_shows_the_us_glyph() {
+        assert_eq!(shifted_label(&KeyboardLayout::Qwerty, 0x1E), "!");
+        assert_eq!(shifted_label(&KeyboardLayout::Qwerty, 0x36), "<");
+    }
+
+    #[test]
+    fn qwerty_falls_back_to_the_combination_for_letters() {
+        assert_eq!(shifted_label(&KeyboardLayout::Qwerty, 0x04), "Shift+A");
+    }
+
+    #[test]
+    fn azerty_never_invents_a_glyph_it_cannot_vouch_for() {
+        // Sur AZERTY, Shift+0x1E produit « 1 », pas « ! ». Faute de table
+        // shiftée pour cette disposition, on montre la combinaison — jamais
+        // un glyphe faux.
+        let label = shifted_label(&KeyboardLayout::Azerty, 0x1E);
+        assert!(label.starts_with("Shift+"), "{label}");
+        assert_ne!(label, "!");
+    }
+
+    #[test]
+    fn non_qwerty_layouts_still_remap_the_base_key_name() {
+        // AZERTY échange A et Q : Shift+0x04 (A physique) doit montrer Q.
+        assert_eq!(shifted_label(&KeyboardLayout::Azerty, 0x04), "Shift+Q");
+    }
+}

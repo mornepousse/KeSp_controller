@@ -92,8 +92,37 @@ pub fn decode_keycode(raw: u16) -> String {
         return format!("TD {index}");
     }
 
+    // --- MK (Modified Key): 0x8000..=0x8FFF ---
+    //     layout: 0x8MKK  where M = mod nibble (4 bits), KK = HID keycode.
+    //     One press sends mod + key together (firmware K_MK). Shift on a key
+    //     whose US glyph changes under Shift is shown as that glyph (`!`);
+    //     anything else as the combination (`Ctrl+C`).
+    if (0x8000..=0x8FFF).contains(&raw) {
+        let mods = ((raw >> 8) & 0x0F) as u8;
+        let kc = (raw & 0xFF) as u8;
+        if mods == 0x02 {
+            if let Some(sym) = shifted_symbol_us(kc) {
+                return sym.to_string();
+            }
+        }
+        return format!("{}+{}", mod_name(mods), hid_key_name(kc));
+    }
+
     // --- Unknown ---
     format!("0x{raw:04X}")
+}
+
+/// US glyph a base HID key produces under Shift, when it differs from the
+/// unshifted one. The controller's reference layout is US, like `hid_key_name`;
+/// other layouts get an honest `Shift+<key>` from `layout_remap::shifted_label`.
+pub fn shifted_symbol_us(base: u8) -> Option<&'static str> {
+    Some(match base {
+        0x1E => "!", 0x1F => "@", 0x20 => "#", 0x21 => "$", 0x22 => "%",
+        0x23 => "^", 0x24 => "&", 0x25 => "*", 0x26 => "(", 0x27 => ")",
+        0x2D => "_", 0x2E => "+", 0x2F => "{", 0x30 => "}", 0x31 => "|",
+        0x33 => ":", 0x34 => "\"", 0x35 => "~", 0x36 => "<", 0x37 => ">", 0x38 => "?",
+        _ => return None,
+    })
 }
 
 /// Decode a modifier bitmask into a human-readable string.
@@ -387,4 +416,49 @@ pub fn hid_key_name(code: u8) -> String {
         _ => return format!("0x{code:02X}"),
     }
     .into()
+}
+
+#[cfg(test)]
+mod modified_key_tests {
+    use super::*;
+
+    #[test]
+    fn mk_shift_plus_1_decodes_as_the_bang_glyph() {
+        assert_eq!(decode_keycode(0x821E), "!");
+        assert_eq!(decode_keycode(0x821F), "@");
+        assert_eq!(decode_keycode(0x8235), "~");
+    }
+
+    #[test]
+    fn mk_shift_on_a_letter_has_no_glyph_and_falls_back() {
+        // 0x04 = A : Shift+A n'est pas un symbole, on montre la combinaison.
+        assert_eq!(decode_keycode(0x8204), "Shift+A");
+    }
+
+    #[test]
+    fn mk_with_a_non_shift_mod_never_renders_the_shifted_glyph() {
+        // Ctrl+1 (0x811E) doit rester « Ctrl+1 », pas « ! » : le glyphe shifté
+        // n'a de sens que pour Shift.
+        assert_eq!(decode_keycode(0x811E), "Ctrl+1");
+        assert_eq!(decode_keycode(0x8106), "Ctrl+C");
+    }
+
+    #[test]
+    fn mk_range_is_exactly_0x8000_to_0x8fff() {
+        // Une implémentation qui testerait `& 0x8000` au lieu de la plage
+        // avalerait 0x9000 ; celle-ci doit rester un code inconnu.
+        assert_eq!(decode_keycode(0x9000), "0x9000");
+        assert_ne!(decode_keycode(0x8000), "0x8000");
+        assert_ne!(decode_keycode(0x8FFF), "0x8FFF");
+    }
+
+    #[test]
+    fn shifted_symbol_table_covers_the_us_number_row_and_punctuation() {
+        assert_eq!(shifted_symbol_us(0x1E), Some("!"));
+        assert_eq!(shifted_symbol_us(0x27), Some(")"));
+        assert_eq!(shifted_symbol_us(0x2D), Some("_"));
+        assert_eq!(shifted_symbol_us(0x38), Some("?"));
+        assert_eq!(shifted_symbol_us(0x04), None, "les lettres n'ont pas de glyphe shifté");
+        assert_eq!(shifted_symbol_us(0x32), None, "ISO #~ n'est pas dans la table US");
+    }
 }
