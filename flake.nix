@@ -30,6 +30,12 @@
           wayland
           udev
           stdenv.cc.cc.lib
+          # Couche de dispatch GL/EGL (libGL.so.1, libEGL.so.1, libGLdispatch.so.0).
+          # Elle N'EST PAS dans /run/opengl-driver/lib : ce répertoire ne contient
+          # que les implémentations fournisseur (libEGL_mesa.so.0,
+          # libEGL_nvidia.so.0, libGLX_nvidia.so.0). Vérifié sur NixOS 26.05.
+          # Sans ce paquet, glutin/winit ne trouve aucun point d'entrée GL.
+          libGL
         ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
           libX11
           libXcursor
@@ -75,7 +81,10 @@
 
         # Dev shell for building from source
         devShells.default = pkgs.mkShell {
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
+          # /run/opengl-driver/lib EN PREMIER : c'est là que NixOS expose les
+          # pilotes graphiques du système (mesa, nvidia). runtimeLibs fournit le
+          # dispatch, ce chemin fournit l'implémentation — il faut les DEUX.
+          LD_LIBRARY_PATH = "/run/opengl-driver/lib:" + pkgs.lib.makeLibraryPath runtimeLibs;
           packages = with pkgs; [
             cargo rustc rust-analyzer clippy
             pkg-config cmake
