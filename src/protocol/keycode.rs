@@ -61,6 +61,12 @@ pub fn decode_keycode(raw: u16) -> String {
         0x3900 => return "GEsc".into(),
         0x3A00 => return "Layer Lock".into(),
         0x3C00 => return "AS Toggle".into(),
+        0x3B00 => return "WPM".into(),
+        // 0x3E00 K_SEC_CONFIRM : autorise une opération en attente sur le
+        // Niphargus chest (module SPI de la moitié gauche). Seule une NOUVELLE
+        // pression confirme — une touche tenue ne réautorise pas.
+        0x3E00 => return "Sec Confirm".into(),
+        0x3F00 => return "Disp Next".into(),
         _ => {}
     }
 
@@ -460,5 +466,41 @@ mod modified_key_tests {
         assert_eq!(shifted_symbol_us(0x38), Some("?"));
         assert_eq!(shifted_symbol_us(0x04), None, "les lettres n'ont pas de glyphe shifté");
         assert_eq!(shifted_symbol_us(0x32), None, "ISO #~ n'est pas dans la table US");
+    }
+}
+
+#[cfg(test)]
+mod late_special_keycode_tests {
+    use super::*;
+
+    #[test]
+    fn the_three_specials_the_firmware_added_without_the_map_are_decoded() {
+        // Ajoutés au firmware sans passer par docs/KEYCODE_MAP.md, d'où six mois
+        // de dérive : le contrôleur les affichait en hexadécimal brut.
+        assert_eq!(decode_keycode(0x3B00), "WPM");        // 2026-03-30
+        assert_eq!(decode_keycode(0x3E00), "Sec Confirm"); // 2026-06-09, chest
+        assert_eq!(decode_keycode(0x3F00), "Disp Next");   // 2026-07-04
+    }
+
+    #[test]
+    fn a_still_unassigned_fixed_code_stays_raw_hex() {
+        // 0x3800 est pris (Meds) et 0x3900 aussi ; 0x2D00 ne l'est pas. Un code
+        // libre doit rester lisible comme inconnu, pas être avalé par une plage.
+        assert_eq!(decode_keycode(0x2D00), "0x2D00");
+    }
+
+    #[test]
+    fn ko_covers_its_whole_slot_range_and_sec_sits_just_past_it() {
+        // Ce que ce test prouve vraiment : KO va jusqu'à 0x3DFF inclus, et
+        // 0x3E00 rend Sec Confirm.
+        //
+        // Ce qu'il NE prouve PAS : que la borne haute de KO soit gardée. Le
+        // `match raw` des codes fixes s'exécute avant le test de plage, donc
+        // élargir KO à 0x3EFF laisse la suite verte — 0x3E00 est intercepté
+        // en amont. Mutant éprouvé, inerte. Seule la disparition de l'entrée
+        // 0x3E00 du match fait tomber quelque chose, et c'est le test au-dessus
+        // qui l'attrape.
+        assert_eq!(decode_keycode(0x3DFF), "KO 255");
+        assert_eq!(decode_keycode(0x3E00), "Sec Confirm");
     }
 }

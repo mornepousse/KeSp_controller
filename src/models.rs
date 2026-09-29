@@ -205,6 +205,7 @@ pub fn build_key_entries_with_layout(layout: &layout_remap::KeyboardLayout) -> R
     for (code, name) in [
         (0x3200u16, "Caps Word"), (0x3300, "Repeat"), (0x3400, "Leader"),
         (0x3900, "GEsc"), (0x3A00, "Layer Lock"), (0x3C00, "AS Toggle"),
+        (0x3B00, "WPM"), (0x3E00, "Sec Confirm"), (0x3F00, "Disp Next"),
     ] {
         entries.push(KeyEntry {
             name: SharedString::from(name),
