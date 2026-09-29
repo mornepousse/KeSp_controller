@@ -30,6 +30,7 @@ fn setup_filter(window: &MainWindow, ctx: &AppContext) {
 fn build_apply_keycode(window: &MainWindow, ctx: &AppContext) -> Rc<dyn Fn(u16)> {
     let serial = ctx.serial.clone();
     let keys_arc = ctx.keys.clone();
+    let device_name = ctx.device_name.clone();
     let current_keymap = ctx.current_keymap.clone();
     let current_layer = ctx.current_layer.clone();
     let keyboard_layout = ctx.keyboard_layout.clone();
@@ -61,6 +62,17 @@ fn build_apply_keycode(window: &MainWindow, ctx: &AppContext) -> Rc<dyn Fn(u16)>
         let keys = keys_arc.borrow().clone();
         let keycaps = w.global::<KeymapBridge>().get_keycaps();
         models::update_keycap_labels(&keycaps, &keys, &km, &layout);
+
+        // K_SEC_CONFIRM (0x3E00) posée sur la moitié droite : le firmware
+        // l'ignorera — un appui venu de la droite passe par une radio non
+        // authentifiée. On avertit, on n'empêche pas : la géométrie est déduite
+        // du layout, et un layout absent ferait refuser une pose légitime.
+        if code == 0x3E00 {
+            let misplaced = protocol::stats::key_is_on_right_half(
+                &keys, key_idx, &device_name.borrow(),
+            );
+            w.global::<AppState>().set_sec_confirm_misplaced(misplaced);
+        }
 
         let payload = protocol::binary::setkey_payload(layer, row as u8, col as u8, code);
         let serial = serial.clone();

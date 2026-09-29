@@ -26,6 +26,9 @@ pub struct AppContext {
     // Independent from `keys` so editing a layout never disturbs the keymap tab.
     pub layout_edit: Rc<RefCell<Vec<KeycapPos>>>,
     pub layout_sel: Rc<Cell<i32>>,
+    /// Nom déclaré par l'appareil (BgMsg::Profile). Sert à savoir de quelle
+    /// main est une demi-matrice seule — la géométrie ne le dit pas.
+    pub device_name: Rc<RefCell<String>>,
 }
 
 /// Messages sent from background serial threads to the UI event loop.

@@ -46,6 +46,7 @@ fn main() {
         is_dongle: Rc::new(std::cell::Cell::new(false)),
         layout_edit: Rc::new(std::cell::RefCell::new(Vec::new())),
         layout_sel: Rc::new(std::cell::Cell::new(-1)),
+        device_name: Rc::new(std::cell::RefCell::new(String::new())),
     };
 
     connection::auto_connect(&window, &ctx);

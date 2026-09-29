@@ -494,3 +494,78 @@ mod row_label_tests {
         assert!((usage[4].pct - 33.3333).abs() < 0.01, "pct[4] = {}", usage[4].pct);
     }
 }
+
+/// La touche d'indice `key_idx` est-elle sur la grappe DROITE du layout ?
+///
+/// Vit ici parce que c'est une pure composition de `detect_hand_split` et
+/// `hand_for_x`, ses voisines. Sert au contrôleur à avertir qu'un
+/// `K_SEC_CONFIRM` posé à droite n'aura aucun effet : sur la Niphargus, un
+/// appui venu de la moitié droite passe par une radio non authentifiée et le
+/// firmware l'ignore.
+///
+/// Rend `false` dès que la question n'a pas de sens — layout vide, indice hors
+/// bornes. Un faux avertissement use la confiance plus vite qu'un
+/// avertissement manquant.
+pub fn key_is_on_right_half(
+    keys: &[crate::protocol::layout::KeycapPos],
+    key_idx: usize,
+    device_name: &str,
+) -> bool {
+    let Some(key) = keys.get(key_idx) else { return false };
+    let xs: Vec<f32> = keys.iter().map(|k| k.x).collect();
+    hand_for_x(key.x, detect_hand_split(&xs, device_name)) == Hand::Right
+}
+
+
+#[cfg(test)]
+mod sec_placement_tests {
+    use super::*;
+    use crate::protocol::layout::KeycapPos;
+
+    fn kp(x: f32) -> KeycapPos {
+        KeycapPos { row: 0, col: 0, x, y: 0.0, w: UNIT_PX, h: UNIT_PX, angle: 0.0 }
+    }
+
+    /// Deux grappes de 7, séparées par 3 u — un Niphargus complet.
+    fn split_board() -> Vec<KeycapPos> {
+        let mut v: Vec<KeycapPos> = (0..7).map(|i| kp(i as f32 * UNIT_PX)).collect();
+        v.extend((0..7).map(|i| kp((i as f32 + 9.0) * UNIT_PX)));
+        v
+    }
+
+    #[test]
+    fn on_a_full_board_only_the_right_cluster_is_flagged() {
+        let keys = split_board();
+        assert!(!key_is_on_right_half(&keys, 0, ""), "index 0 = extrême gauche");
+        assert!(!key_is_on_right_half(&keys, 6, ""), "index 6 = fin de la grappe gauche");
+        assert!(key_is_on_right_half(&keys, 7, ""), "index 7 = début de la grappe droite");
+        assert!(key_is_on_right_half(&keys, 13, ""), "index 13 = extrême droite");
+    }
+
+    #[test]
+    fn a_lone_left_half_never_flags_anything() {
+        // Le maître gauche seul : toutes ses touches sont légitimes.
+        let keys: Vec<KeycapPos> = (0..7).map(|i| kp(i as f32 * UNIT_PX)).collect();
+        for i in 0..keys.len() {
+            assert!(!key_is_on_right_half(&keys, i, "Niphargus Left"), "touche {i}");
+        }
+    }
+
+    #[test]
+    fn a_lone_right_half_flags_every_key() {
+        // Une moitié droite seule : aucune de ses touches ne peut confirmer.
+        let keys: Vec<KeycapPos> = (0..7).map(|i| kp(i as f32 * UNIT_PX)).collect();
+        for i in 0..keys.len() {
+            assert!(key_is_on_right_half(&keys, i, "Niphargus Right"), "touche {i}");
+        }
+    }
+
+    #[test]
+    fn nonsense_input_never_warns() {
+        // Pas de layout, ou un index hors bornes : on se tait plutôt que
+        // d'avertir à tort. Un faux avertissement use la confiance bien plus
+        // vite qu'un avertissement manquant.
+        assert!(!key_is_on_right_half(&[], 0, ""));
+        assert!(!key_is_on_right_half(&split_board(), 99, ""));
+    }
+}

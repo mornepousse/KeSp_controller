@@ -101,4 +101,60 @@ export component MainWindow inherits Window {
 
     // Modal overlay (above everything)
     KeySelector { }
+
+    // Sec Confirm posée sur la moitié droite : le firmware ignorera l'appui.
+    // On avertit sans empêcher — la touche est bien assignée.
+    if AppState.sec-confirm-misplaced : Rectangle {
+        background: #000000aa;
+
+        TouchArea {
+            clicked => { AppState.sec-confirm-misplaced = false; }
+        }
+
+        Rectangle {
+            width: 340px;
+            height: 170px;
+            border-radius: 8px;
+            background: Theme.bg-secondary;
+
+            VerticalLayout {
+                padding: 18px;
+                spacing: 10px;
+                alignment: center;
+
+                Text {
+                    text: "Sec Confirm sur la moitié droite";
+                    color: Theme.accent-orange;
+                    font-size: 14px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "La touche est assignée, mais le firmware ignorera l'appui : "
+                        + "une confirmation venue de la moitié droite passe par une radio "
+                        + "non authentifiée. Place-la sur la moitié gauche pour qu'elle agisse.";
+                    color: Theme.fg-secondary;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                }
+
+                Rectangle {
+                    height: 30px;
+                    width: 90px;
+                    border-radius: 5px;
+                    background: ta.has-hover ? Theme.accent-purple : Theme.bg-surface;
+                    ta := TouchArea {
+                        clicked => { AppState.sec-confirm-misplaced = false; }
+                    }
+                    Text {
+                        text: "Compris";
+                        color: Theme.fg-primary;
+                        font-size: 12px;
+                    }
+                }
+            }
+        }
+    }
 }

@@ -30,6 +30,8 @@ export global AppState {
     in-out property <ConnectionState> connection: ConnectionState.disconnected;
     in-out property <ActiveTab> active-tab: ActiveTab.keymap;
     in-out property <bool> is-dongle: false;
+    // Sec Confirm posée sur la moitié droite : le firmware ignorera l'appui.
+    in-out property <bool> sec-confirm-misplaced: false;
     callback tab-changed(int);
     in-out property <string> status-text: "Disconnected";
     in-out property <bool> spinner-visible: false;

@@ -21,6 +21,7 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
     let is_dongle = ctx.is_dongle.clone();
     let layout_edit = ctx.layout_edit.clone();
     let layout_sel = ctx.layout_sel.clone();
+    let device_name = ctx.device_name.clone();
 
     let timer = slint::Timer::default();
     timer.start(
@@ -33,7 +34,7 @@ pub fn run(window: &MainWindow, ctx: &AppContext, bg_rx: mpsc::Receiver<BgMsg>) 
                 handle_msg(
                     &window, msg,
                     &keys_arc, &current_keymap, &keyboard_layout, &heatmap_data,
-                    &is_dongle, &layout_edit, &layout_sel,
+                    &is_dongle, &layout_edit, &layout_sel, &device_name,
                 );
             }
         },
@@ -140,6 +141,7 @@ fn handle_msg(
     is_dongle: &Rc<std::cell::Cell<bool>>,
     layout_edit: &Rc<std::cell::RefCell<Vec<crate::protocol::layout::KeycapPos>>>,
     layout_sel: &Rc<std::cell::Cell<i32>>,
+    device_name: &Rc<std::cell::RefCell<String>>,
 ) {
     match msg {
         BgMsg::Connected(port, fw, names, km) => {
@@ -508,6 +510,7 @@ fn handle_msg(
         }
         BgMsg::Profile(p) => {
             eprintln!("device: {} — {}x{}, {} capacites", p.name, p.rows, p.cols, p.features.len());
+            *device_name.borrow_mut() = p.name.clone();
         }
         // Dongle / wireless messages (per CDC_DONGLE_INTEGRATION.md)
         BgMsg::RfModeChanged(dongle_mode) => {
