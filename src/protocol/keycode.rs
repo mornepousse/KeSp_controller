@@ -66,6 +66,11 @@ pub fn decode_keycode(raw: u16) -> String {
         // Niphargus chest (module SPI de la moitié gauche). Seule une NOUVELLE
         // pression confirme — une touche tenue ne réautorise pas.
         0x3E00 => return "Sec Confirm".into(),
+        // 0x3E01 K_CHEST_NEXT : fait défiler le mode USB du coffre
+        // (none -> storage -> pgp -> otp -> fido -> oath -> none). Partage la
+        // plage sécurité 0x3E00-0x3EFF, mais n'est PAS un geste de sécurité —
+        // aucune contrainte de moitié, contrairement à Sec Confirm.
+        0x3E01 => return "Chest Next".into(),
         0x3F00 => return "Disp Next".into(),
         _ => {}
     }
@@ -480,6 +485,23 @@ mod late_special_keycode_tests {
         assert_eq!(decode_keycode(0x3B00), "WPM");        // 2026-03-30
         assert_eq!(decode_keycode(0x3E00), "Sec Confirm"); // 2026-06-09, chest
         assert_eq!(decode_keycode(0x3F00), "Disp Next");   // 2026-07-04
+    }
+
+    #[test]
+    fn chest_next_is_decoded_and_distinct_from_sec_confirm() {
+        // 0x3E01, firmware 5ea4f7d7. Partage la plage sécurité avec Sec Confirm
+        // mais fait tout autre chose : défilement du mode USB du coffre.
+        assert_eq!(decode_keycode(0x3E01), "Chest Next");
+        assert_ne!(decode_keycode(0x3E01), decode_keycode(0x3E00));
+    }
+
+    #[test]
+    fn the_rest_of_the_security_block_is_still_undefined() {
+        // Seuls 0x3E00 et 0x3E01 existent. Le reste du bloc ne doit pas être
+        // inventé : un nom pour un code indéfini masquerait un vrai décalage
+        // entre les deux dépôts.
+        assert_eq!(decode_keycode(0x3E02), "0x3E02");
+        assert_eq!(decode_keycode(0x3EFF), "0x3EFF");
     }
 
     #[test]

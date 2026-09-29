@@ -205,11 +205,13 @@ pub fn build_key_entries_with_layout(layout: &layout_remap::KeyboardLayout) -> R
     // Coffre Niphargus — un ESP32-P4 distinct, relié en SPI à la moitié gauche.
     // Ses touches ont leur propre section : ce ne sont pas des fonctions du
     // clavier mais des commandes envoyées à un autre appareil.
-    entries.push(KeyEntry {
-        name: SharedString::from("Sec Confirm"),
-        code: 0x3E00,
-        category: SharedString::from("Chest"),
-    });
+    for (code, name) in [(0x3E00u16, "Sec Confirm"), (0x3E01, "Chest Next")] {
+        entries.push(KeyEntry {
+            name: SharedString::from(name),
+            code: code as i32,
+            category: SharedString::from("Chest"),
+        });
+    }
     for (code, name) in [
         (0x3200u16, "Caps Word"), (0x3300, "Repeat"), (0x3400, "Leader"),
         (0x3900, "GEsc"), (0x3A00, "Layer Lock"), (0x3C00, "AS Toggle"),
