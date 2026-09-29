@@ -67,6 +67,12 @@ fn build_apply_keycode(window: &MainWindow, ctx: &AppContext) -> Rc<dyn Fn(u16)>
         // l'ignorera — un appui venu de la droite passe par une radio non
         // authentifiée. On avertit, on n'empêche pas : la géométrie est déduite
         // du layout, et un layout absent ferait refuser une pose légitime.
+        //
+        // Le test porte sur le CODE EXACT, jamais sur la plage sécurité
+        // 0x3E00-0x3EFF (K_IS_SEC). K_CHEST_NEXT (0x3E01) y vit aussi et n'est
+        // PAS restreint à la gauche : elle fait défiler le mode USB du coffre,
+        // ce n'est pas un geste de sécurité. Élargir ce test à la plage
+        // avertirait à tort sur elle.
         if code == 0x3E00 {
             let misplaced = protocol::stats::key_is_on_right_half(
                 &keys, key_idx, &device_name.borrow(),
