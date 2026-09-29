@@ -202,6 +202,14 @@ pub fn build_key_entries_with_layout(layout: &layout_remap::KeyboardLayout) -> R
             category: SharedString::from("Layer"),
         });
     }
+    // Coffre Niphargus — un ESP32-P4 distinct, relié en SPI à la moitié gauche.
+    // Ses touches ont leur propre section : ce ne sont pas des fonctions du
+    // clavier mais des commandes envoyées à un autre appareil.
+    entries.push(KeyEntry {
+        name: SharedString::from("Sec Confirm"),
+        code: 0x3E00,
+        category: SharedString::from("Chest"),
+    });
     for (code, name) in [
         (0x3200u16, "Caps Word"), (0x3300, "Repeat"), (0x3400, "Leader"),
         (0x3900, "GEsc"), (0x3A00, "Layer Lock"), (0x3C00, "AS Toggle"),
@@ -209,7 +217,10 @@ pub fn build_key_entries_with_layout(layout: &layout_remap::KeyboardLayout) -> R
         // usage interne (requête affichée à l'écran), pas destiné à une
         // keymap — et aucun code de main/ ne le traite. decode_keycode le
         // connaît quand même, pour qu'une keymap qui en contient reste lisible.
-        (0x3E00, "Sec Confirm"), (0x3F00, "Disp Next"),
+        //
+        // Disp Next reste ici : c'est l'écran OLED du clavier. Les touches du
+        // coffre sont dans leur propre section (voir plus bas).
+        (0x3F00, "Disp Next"),
     ] {
         entries.push(KeyEntry {
             name: SharedString::from(name),
@@ -253,6 +264,7 @@ pub fn populate_key_categories(window: &MainWindow, all_keys: &VecModel<KeyEntry
     ks.set_cat_symbols(set(filter("Symbol")));
     ks.set_cat_layers(set(filter("Layer")));
     ks.set_cat_special(set(filter("Special")));
+    ks.set_cat_chest(set(filter("Chest")));
     ks.set_cat_td_macro(set(filter("TDMacro")));
 }
 
