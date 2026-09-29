@@ -71,6 +71,13 @@ pub fn decode_keycode(raw: u16) -> String {
         // plage sécurité 0x3E00-0x3EFF, mais n'est PAS un geste de sécurité —
         // aucune contrainte de moitié, contrairement à Sec Confirm.
         0x3E01 => return "Chest Next".into(),
+        // 0x3E02-0x3E04 : navigation dans les comptes OATH du coffre et demande
+        // de code TOTP. Actions de firmware — aucun rapport HID, une requête par
+        // appui. Aucune restriction de moitié ; OATH Code exige en revanche un
+        // Sec Confirm séparé pour que le code s'affiche.
+        0x3E02 => return "OATH Prev".into(),
+        0x3E03 => return "OATH Next".into(),
+        0x3E04 => return "OATH Code".into(),
         0x3F00 => return "Disp Next".into(),
         _ => {}
     }
@@ -496,11 +503,22 @@ mod late_special_keycode_tests {
     }
 
     #[test]
+    fn the_oath_keys_are_decoded() {
+        // 0x3E02-0x3E04, firmware d6e878fc. Actions de firmware : aucun rapport
+        // HID, une requête par appui. Aucune n'est restreinte à une moitié —
+        // la carte du firmware les marque « not left-only, not security-bound ».
+        assert_eq!(decode_keycode(0x3E02), "OATH Prev");
+        assert_eq!(decode_keycode(0x3E03), "OATH Next");
+        assert_eq!(decode_keycode(0x3E04), "OATH Code");
+    }
+
+    #[test]
     fn the_rest_of_the_security_block_is_still_undefined() {
-        // Seuls 0x3E00 et 0x3E01 existent. Le reste du bloc ne doit pas être
-        // inventé : un nom pour un code indéfini masquerait un vrai décalage
-        // entre les deux dépôts.
-        assert_eq!(decode_keycode(0x3E02), "0x3E02");
+        // Frontière du bloc au 2026-09-29 : 0x3E00..=0x3E04 définis, le reste
+        // non. Ce test se déplace à CHAQUE ajout — c'est voulu : un nom inventé
+        // pour un code indéfini masquerait un décalage entre les deux dépôts,
+        // et c'est lui qui a signalé l'arrivée des trois OATH.
+        assert_eq!(decode_keycode(0x3E05), "0x3E05");
         assert_eq!(decode_keycode(0x3EFF), "0x3EFF");
     }
 
