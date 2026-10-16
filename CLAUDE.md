@@ -14,10 +14,7 @@ Source unique de vérité : `scripts/check.sh`.
 
 **Hooks Claude Code** (`.claude/settings.json`, automatiques). Échelle de
 gravité : **pendant → informe, à la conclusion → bloque, au push → bloque.**
-- `PostToolUse` sur édition d'un fichier surveillé → `check.sh --fast`, en
-  **avis non bloquant**. Il signale le rouge sans interrompre : la norme TDD
-  impose d'écrire l'assertion rouge AVANT l'implémentation, et bloquer là ferait
-  sonner l'alarme à chaque pas correct. Un avis n'est pas à ignorer pour autant.
+- Plus de hook par édition (tripwire v0.17.0) : lancer `./scripts/check.sh --fast` soi-même en cours de route ; le `Stop` bloque une fois par état rouge.
 - `Stop` → `check.sh --fast` (~1 s) et il **bloque** : on ne conclut pas un tour
   sur du rouge. Le build complet (clippy -D warnings + cargo build --release) n'est PAS relancé à
   chaque fin de tour, il reste garanti au pre-push git.
