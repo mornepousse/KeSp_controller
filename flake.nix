@@ -10,16 +10,22 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "2.1.0";
+        version = "2.2.0";
 
-        # Binaries are hosted on GitLab generic package registry.
-        # URL format: https://gitlab.com/api/v4/projects/<project>/packages/generic/kesp-controller/<version>/<file>
-        gitlabPkg = "https://gitlab.com/api/v4/projects/harrael%2FKeSp_controller/packages/generic/kesp-controller";
+        # Binaries come from the GitHub release assets — public, no token.
+        # URL format: https://github.com/<owner>/<repo>/releases/download/v<version>/<file>
+        #
+        # Le hash adresse le CONTENU : il doit etre releve sur l'asset REEL de
+        # la version, apres publication, et change dans le MEME commit que
+        # `version`. Au bump v2.1.0 la version avait ete montee sans le hash,
+        # et nix a servi le binaire de v2.0.9 pendant cinq mois sans erreur.
+        # Voir la section Release du CLAUDE.md.
+        ghRelease = "https://github.com/mornepousse/KeSp_controller/releases/download";
 
         assets = {
           x86_64-linux = {
-            url = "${gitlabPkg}/v${version}/KeSp_controller-linux-x86_64";
-            hash = "sha256-4TM6LluoQl6ni6R4xIUPwrr/i5kcqrth5xzhjo3Ce1U=";
+            url = "${ghRelease}/v${version}/KeSp_controller-linux-x86_64";
+            hash = "sha256-GtafNfIEj81rL+LXDdC3PalatJy3t9GgXbaGkIBxAwM=";
           };
         };
 
