@@ -36,7 +36,7 @@
           # libEGL_nvidia.so.0, libGLX_nvidia.so.0). Vérifié sur NixOS 26.05.
           # Sans ce paquet, glutin/winit ne trouve aucun point d'entrée GL.
           libGL
-        ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+        ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
           libX11
           libXcursor
           libXrandr
