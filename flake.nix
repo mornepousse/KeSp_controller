@@ -19,7 +19,7 @@
         assets = {
           x86_64-linux = {
             url = "${gitlabPkg}/v${version}/KeSp_controller-linux-x86_64";
-            hash = "sha256-Ga9BCwY04glRkoKNYGBOIgOuNfFRQcxzXxBoWfg074M=";
+            hash = "sha256-4TM6LluoQl6ni6R4xIUPwrr/i5kcqrth5xzhjo3Ce1U=";
           };
         };
 
