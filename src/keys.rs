@@ -335,6 +335,13 @@ mod tests {
     }
 
     #[test]
+    fn changing_the_host_layout_relabels_the_keys() {
+        // HID code of the key that sits where Q does on a QWERTY board.
+        assert_eq!(label_for(0x14, &KeyboardLayout::Qwerty), "Q");
+        assert_eq!(label_for(0x14, &KeyboardLayout::Azerty), "A");
+    }
+
+    #[test]
     fn every_macro_and_tap_dance_of_the_firmware_has_a_key() {
         let all = catalog(&KeyboardLayout::Qwerty);
         assert_eq!(section_entries(&all, &["Macro"], "").len(), 20);

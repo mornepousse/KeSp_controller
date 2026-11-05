@@ -1,0 +1,30 @@
+# Publishes the browser version of each release to the gh-pages branch.
+name: Web version
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add wasm32-unknown-unknown
+      - run: sh tools/build_web.sh
+      - name: Push web/ to gh-pages
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd web
+          touch .nojekyll
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898283+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "Web version $GITHUB_REF_NAME"
+          git push -f "https://x-access-token:$TOKEN@github.com/$GITHUB_REPOSITORY.git" gh-pages
