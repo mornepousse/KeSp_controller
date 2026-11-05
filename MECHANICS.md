@@ -220,6 +220,12 @@ decompiled. Read as machine code instead, all matching the source: the combo lis
 more: `parse_ko_entries` follows the firmware's `bin_cmd_ko_list`. The real dongle's combo, leader and override
 lists are empty, so those three have never read real content in this version.
 
+The dongle's replies, read the same way, also match `parsers.rs`: radio status at `0x3456ae` (27 bytes at least,
+checked at `0x3455e5`; flags bit 0 left and bit 1 right), battery at `0x345309` (14 bytes at least, checked at
+`0x345231`; two slots of 7 bytes), pair list (13 bytes at least, `0x3b1084`), pair start (3 bytes at least,
+`0x35fa7c`), signal bars at `0x345f90` (200, 140, 80, 30). Ghidra's pseudocode for this block was no use: it stops
+at the first call it wrongly treats as never returning.
+
 ## Tried on real hardware
 
 On the real dongle (firmware v4.2.0-beta.3): connecting, and every read of the Keymap, Behaviors, Typing and
