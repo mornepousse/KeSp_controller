@@ -11,11 +11,11 @@ if [ ! -x "$TOOL" ] || [ "$("$TOOL" --version | cut -d' ' -f2)" != "$WANTED" ]; 
 fi
 
 # The Rust toolchain here has no linker for this target: borrow one for this build.
-if command -v lld >/dev/null 2>&1; then
-  cargo build --release --target wasm32-unknown-unknown
-else
+if command -v nix >/dev/null 2>&1 && ! command -v lld >/dev/null 2>&1; then
   nix shell nixpkgs#lld -c cargo build --release --target wasm32-unknown-unknown
+else
+  cargo build --release --target wasm32-unknown-unknown
 fi
-"$TOOL" --target web --no-typescript --out-dir web/pkg \
-  target/wasm32-unknown-unknown/release/kesp-controller.wasm
+"$TOOL" --target web --no-typescript --out-dir web/pkg --out-name kesp-controller \
+  "${CARGO_TARGET_DIR:-target}/wasm32-unknown-unknown/release/KeSp_controller.wasm"
 ls -la web/pkg
