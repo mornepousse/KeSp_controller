@@ -351,6 +351,13 @@ impl SerialManager {
     }
 
     fn read_raw(&mut self, timeout_ms: u64) -> Result<Vec<u8>, String> {
+        self.read_until(timeout_ms, |_| false)
+    }
+
+    /// Read until `done` says the bytes are complete, the line goes quiet after
+    /// some data, or the time is up. Without `done`, every reply costs a full port
+    /// timeout of silence: 300 ms per key written.
+    fn read_until(&mut self, timeout_ms: u64, done: impl Fn(&[u8]) -> bool) -> Result<Vec<u8>, String> {
         let port = self.port.as_mut().ok_or("Not connected")?;
         let mut buf = vec![0u8; 4096];
         let mut result = Vec::new();
@@ -364,6 +371,9 @@ impl SerialManager {
                 Ok(n) if n > 0 => {
                     let received_bytes = &buf[..n];
                     result.extend_from_slice(received_bytes);
+                    if done(&result) {
+                        break;
+                    }
                     std::thread::sleep(Duration::from_millis(5));
                 }
                 _ => {
@@ -437,7 +447,7 @@ impl SerialManager {
             self.connection_kind,
             BINARY_READ_TIMEOUT_MS,
         );
-        let raw = self.read_raw(timeout_ms)?;
+        let raw = self.read_until(timeout_ms, |bytes| bp::parse_kr(bytes).is_ok())?;
 
         if raw.is_empty()
             && matches!(

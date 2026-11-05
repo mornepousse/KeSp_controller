@@ -1,15 +1,5 @@
-//! Serial communication module.
-//! Dispatches to native (serialport crate) or web (WebSerial API)
-//! depending on the target architecture.
+//! Serial communication, desktop side. The browser goes through `backend_web`.
 
-#[cfg(not(target_arch = "wasm32"))]
 mod native;
 
-#[cfg(target_arch = "wasm32")]
-mod web;
-
-#[cfg(not(target_arch = "wasm32"))]
 pub use native::*;
-
-#[cfg(target_arch = "wasm32")]
-pub use web::*;

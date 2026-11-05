@@ -345,6 +345,8 @@ impl MacroStep {
 pub struct MacroEntry {
     pub slot: u8,
     pub name: String,
+    /// Keys pressed together, for macros made that way (MACRO_ADD).
+    pub keys: Vec<u8>,
     pub steps: Vec<MacroStep>,
 }
 
@@ -444,6 +446,7 @@ pub fn parse_macro_lines(lines: &[String]) -> Vec<MacroEntry> {
         result.push(MacroEntry {
             slot,
             name,
+            keys: Vec::new(),
             steps,
         });
     }
@@ -457,11 +460,14 @@ pub fn parse_macro_lines(lines: &[String]) -> Vec<MacroEntry> {
 // These functions parse the *payload* bytes extracted from a KR response frame.
 // They produce the same data types as the text parsers above.
 
+/// Tap dance slots of the firmware (`TAP_DANCE_MAX_SLOTS`).
+pub const TD_SLOTS: usize = 16;
+
 /// Parse TD_LIST (0x51) binary payload.
 /// Format: [count:u8] then count entries of [idx:u8][a1:u8][a2:u8][a3:u8][a4:u8].
 /// Returns Vec<[u16; 4]> with 8 slots (same shape as parse_td_lines).
 pub fn parse_td_binary(payload: &[u8]) -> Vec<[u16; 4]> {
-    let mut result = vec![[0u16; 4]; 8];
+    let mut result = vec![[0u16; 4]; TD_SLOTS];
 
     // Need at least 1 byte for count
     let has_count = !payload.is_empty();
@@ -487,7 +493,7 @@ pub fn parse_td_binary(payload: &[u8]) -> Vec<[u16; 4]> {
         let action3 = payload[offset + 3] as u16;
         let action4 = payload[offset + 4] as u16;
 
-        let valid_index = idx < 8;
+        let valid_index = idx < TD_SLOTS;
         if valid_index {
             result[idx] = [action1, action2, action3, action4];
         }
@@ -625,6 +631,104 @@ pub fn parse_ko_binary(payload: &[u8]) -> Vec<[u8; 4]> {
     }
 
     result
+}
+
+/// One key override, with the firmware slot it lives in: the list skips empty
+/// slots, so its position in the list says nothing about its slot.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KoEntry {
+    pub index: u8,
+    pub trigger_key: u8,
+    pub trigger_mod: u8,
+    pub result_key: u8,
+    pub result_mod: u8,
+}
+
+/// Parse KO_LIST (0x92), keeping each override's slot.
+pub fn parse_ko_entries(payload: &[u8]) -> Vec<KoEntry> {
+    let count = payload.first().copied().unwrap_or(0) as usize;
+    payload
+        .get(1..)
+        .unwrap_or(&[])
+        .chunks_exact(5)
+        .take(count)
+        .map(|e| KoEntry { index: e[0], trigger_key: e[1], trigger_mod: e[2], result_key: e[3], result_mod: e[4] })
+        .collect()
+}
+
+/// Parse LIST_LAYOUTS (0x21): [count] then per layer [index][name_len][name].
+pub fn parse_layer_names(payload: &[u8]) -> Vec<String> {
+    let count = payload.first().copied().unwrap_or(0) as usize;
+    let mut names = Vec::with_capacity(count);
+    let mut i = 1;
+    for _ in 0..count {
+        let Some(&len) = payload.get(i + 1) else { break };
+        let end = i + 2 + len as usize;
+        let Some(name) = payload.get(i + 2..end) else { break };
+        names.push(String::from_utf8_lossy(name).to_string());
+        i = end;
+    }
+    names
+}
+
+#[cfg(test)]
+mod firmware_list_tests {
+    use super::*;
+
+    #[test]
+    fn layer_names_read_as_a_real_dongle_sends_them() {
+        let p = b"\x02\x00\x04MAIN\x01\x03NAV";
+        assert_eq!(parse_layer_names(p), vec!["MAIN".to_string(), "NAV".to_string()]);
+        // Cut short: what is complete still comes through.
+        assert_eq!(parse_layer_names(b"\x02\x00\x04MAIN\x01\x09NA"), vec!["MAIN".to_string()]);
+        assert!(parse_layer_names(&[]).is_empty());
+    }
+
+    #[test]
+    fn overrides_keep_their_slot_when_the_list_has_holes() {
+        // Slots 1 and 4 used, as bin_cmd_ko_list sends them.
+        let p = [2, 1, 0x2A, 0x02, 0x4C, 0, 4, 0x04, 0, 0x05, 0];
+        let e = parse_ko_entries(&p);
+        assert_eq!(e.len(), 2);
+        assert_eq!((e[0].index, e[0].trigger_key, e[0].trigger_mod, e[0].result_key), (1, 0x2A, 0x02, 0x4C));
+        assert_eq!(e[1].index, 4);
+    }
+
+    #[test]
+    fn a_short_override_list_stops_without_a_panic() {
+        assert!(parse_ko_entries(&[]).is_empty());
+        assert_eq!(parse_ko_entries(&[3, 0, 1, 2, 3, 4, 9]).len(), 1);
+    }
+
+    #[test]
+    fn tap_dances_in_the_upper_slots_are_kept() {
+        let p = [1, 15, 0x04, 0x05, 0x06, 0x07];
+        let t = parse_td_binary(&p);
+        assert_eq!(t.len(), 16);
+        assert_eq!(t[15], [4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn a_tap_dance_slot_past_the_firmware_range_is_ignored() {
+        let t = parse_td_binary(&[1, 16, 1, 2, 3, 4]);
+        assert!(t.iter().flatten().all(|&a| a == 0));
+    }
+
+    #[test]
+    fn leader_entries_follow_the_firmware_layout() {
+        // idx 2, sequence S I, sends Ctrl+S; idx 5, sequence Q, sends Esc.
+        let p = [2, 2, 2, 0x16, 0x0C, 0x16, 0x01, 5, 1, 0x14, 0x29, 0];
+        let l = parse_leader_binary(&p);
+        assert_eq!(l.len(), 2);
+        assert_eq!((l[0].index, l[0].sequence.clone(), l[0].result, l[0].result_mod), (2, vec![0x16, 0x0C], 0x16, 1));
+        assert_eq!((l[1].index, l[1].sequence.clone(), l[1].result), (5, vec![0x14], 0x29));
+    }
+
+    #[test]
+    fn combo_entries_follow_the_firmware_layout() {
+        let c = parse_combo_binary(&[1, 3, 2, 1, 2, 9, 0x29]);
+        assert_eq!((c[0].index, c[0].r1, c[0].c1, c[0].r2, c[0].c2, c[0].result), (3, 2, 1, 2, 9, 0x29));
+    }
 }
 
 /// Parse BT_QUERY (0x80) binary payload.
@@ -796,7 +900,7 @@ pub fn parse_macros_binary(payload: &[u8]) -> Vec<MacroEntry> {
             break;
         }
 
-        // Skip the raw keys bytes
+        let keys = payload[offset..offset + keys_len].to_vec();
         offset += keys_len;
 
         // Read step_count + steps
@@ -831,11 +935,31 @@ pub fn parse_macros_binary(payload: &[u8]) -> Vec<MacroEntry> {
         result.push(MacroEntry {
             slot,
             name,
+            keys,
             steps,
         });
     }
 
     result
+}
+
+#[cfg(test)]
+mod real_macro_tests {
+    use super::*;
+
+    /// LIST_MACROS as a real dongle answered it (firmware v4.2.0-beta.3).
+    const REAL: &[u8] = b"\x02\x00\x00\x15\x06Copier\x02\xe0\x06\x00\x01\x00\x16\x06Coller\x02\xe0\x19\x00";
+
+    #[test]
+    fn macros_made_of_keys_pressed_together_keep_their_keys() {
+        let m = parse_macros_binary(REAL);
+        assert_eq!(m.len(), 2);
+        assert_eq!((m[0].slot, m[0].name.as_str()), (0, "Copier"));
+        assert_eq!(m[0].keys, vec![0xE0, 0x06]);
+        assert!(m[0].steps.is_empty());
+        assert_eq!((m[1].slot, m[1].name.as_str()), (1, "Coller"));
+        assert_eq!(m[1].keys, vec![0xE0, 0x19]);
+    }
 }
 
 /// Parse KEYSTATS_BIN (0x40) binary payload.

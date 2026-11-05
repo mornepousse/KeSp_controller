@@ -58,6 +58,35 @@ fn col_to_hand_finger(col: usize) -> (Hand, Finger) {
     }
 }
 
+/// Hand and finger of a matrix position. The KaSe rule above only knows 13 columns,
+/// and its fallback sent a Niphargus' column 13 to the left pinky. The Niphargus
+/// (4 rows, 7 columns per half) follows the firmware: its right half is the same
+/// board flipped, physical column = 13 - keymap column (`half_col_to_keymap`),
+/// fingers read on the factory home row Esc A S D F G ], last row = thumbs.
+fn hand_finger(row: usize, col: usize, rows: usize, cols: usize) -> (Hand, Finger) {
+    if rows != 4 || (cols != 7 && cols != 14) {
+        return col_to_hand_finger(col);
+    }
+    let hand = if col < 7 { Hand::Left } else { Hand::Right };
+    let physical = if col < 7 { col } else { 13usize.saturating_sub(col) };
+    let finger = if row == rows - 1 {
+        Finger::Thumb
+    } else {
+        match physical {
+            0 | 1 => Finger::Pinky,
+            2 => Finger::Ring,
+            3 => Finger::Middle,
+            _ => Finger::Index,
+        }
+    };
+    (hand, finger)
+}
+
+/// Shape of a heatmap: (rows, columns).
+fn heat_size(heatmap: &[Vec<u32>]) -> (usize, usize) {
+    (heatmap.len(), heatmap.first().map_or(0, Vec::len))
+}
+
 /// Écart horizontal minimal séparant deux mains — 1,5 u. En deçà, c'est
 /// l'espacement normal entre deux colonnes ; au-delà, c'est le trou du split.
 const HAND_GAP_PX: f32 = 1.5 * UNIT_PX;
@@ -154,9 +183,10 @@ pub fn hand_balance(heatmap: &[Vec<u32>]) -> HandBalance {
     let mut left: u32 = 0;
     let mut right: u32 = 0;
 
-    for row in heatmap {
+    let (rows, cols) = heat_size(heatmap);
+    for (r, row) in heatmap.iter().enumerate() {
         for (c, &count) in row.iter().enumerate() {
-            let (hand, _) = col_to_hand_finger(c);
+            let (hand, _) = hand_finger(r, c, rows, cols);
             match hand {
                 Hand::Left => left += count,
                 Hand::Right => right += count,
@@ -175,9 +205,10 @@ pub fn hand_balance(heatmap: &[Vec<u32>]) -> HandBalance {
 pub fn finger_load(heatmap: &[Vec<u32>]) -> Vec<FingerLoad> {
     let mut counts = [[0u32; 5]; 2]; // [hand][finger]
 
-    for row in heatmap {
+    let (rows, cols) = heat_size(heatmap);
+    for (r, row) in heatmap.iter().enumerate() {
         for (c, &count) in row.iter().enumerate() {
-            let (hand, finger) = col_to_hand_finger(c);
+            let (hand, finger) = hand_finger(r, c, rows, cols);
             let hi = if hand == Hand::Left { 0 } else { 1 };
             let fi = match finger {
                 Finger::Pinky => 0,
@@ -249,7 +280,8 @@ pub fn top_keys(heatmap: &[Vec<u32>], keymap: &[Vec<u16>], n: usize) -> Vec<TopK
     for (count, r, c) in all_keys {
         let code = keymap.get(r).and_then(|row| row.get(c)).copied().unwrap_or(0);
         let name = keycode::decode_keycode(code);
-        let (hand, finger) = col_to_hand_finger(c);
+        let (rows, cols) = heat_size(heatmap);
+        let (hand, finger) = hand_finger(r, c, rows, cols);
         let hand_str = if hand == Hand::Left { "L" } else { "R" };
         let finger_str = match finger {
             Finger::Pinky => "Pinky",
@@ -269,6 +301,10 @@ pub fn top_keys(heatmap: &[Vec<u32>], keymap: &[Vec<u16>], n: usize) -> Vec<TopK
 /// Find keys that have never been pressed (count = 0, keycode != 0).
 pub fn dead_keys(heatmap: &[Vec<u32>], keymap: &[Vec<u16>]) -> Vec<String> {
     let mut result = Vec::new();
+    // Nothing counted yet says nothing about any key.
+    if heatmap.iter().flatten().all(|&c| c == 0) {
+        return result;
+    }
     for (r, row) in heatmap.iter().enumerate() {
         for (c, &count) in row.iter().enumerate() {
             if count > 0 { continue; }
@@ -359,15 +395,15 @@ fn parse_rc(s: &str) -> Option<(u8, u8)> {
 }
 
 /// Analyze bigram entries for hand alternation and SFB.
-pub fn analyze_bigrams(entries: &[BigramEntry]) -> BigramAnalysis {
+pub fn analyze_bigrams(entries: &[BigramEntry], rows: usize, cols: usize) -> BigramAnalysis {
     let mut alt_hand: u32 = 0;
     let mut same_hand: u32 = 0;
     let mut sfb: u32 = 0;
     let mut total: u32 = 0;
 
     for entry in entries {
-        let (hand_from, finger_from) = col_to_hand_finger(entry.from_col as usize);
-        let (hand_to, finger_to) = col_to_hand_finger(entry.to_col as usize);
+        let (hand_from, finger_from) = hand_finger(entry.from_row as usize, entry.from_col as usize, rows, cols);
+        let (hand_to, finger_to) = hand_finger(entry.to_row as usize, entry.to_col as usize, rows, cols);
 
         total += entry.count;
 
@@ -388,6 +424,75 @@ pub fn analyze_bigrams(entries: &[BigramEntry]) -> BigramAnalysis {
     BigramAnalysis {
         total, alt_hand, same_hand, sfb,
         alt_hand_pct, same_hand_pct, sfb_pct,
+    }
+}
+
+#[cfg(test)]
+mod niphargus_stats_tests {
+    use super::*;
+
+    fn heat(r: usize, c: usize, rows: usize, cols: usize) -> Vec<Vec<u32>> {
+        let mut h = vec![vec![0u32; cols]; rows];
+        h[r][c] = 100;
+        h
+    }
+
+    #[test]
+    fn with_nothing_counted_no_key_is_called_dead() {
+        let km = vec![vec![4u16; 7]; 4];
+        assert!(dead_keys(&vec![vec![0; 7]; 4], &km).is_empty());
+        let mut some = vec![vec![0u32; 7]; 4];
+        some[0][0] = 3;
+        assert_eq!(dead_keys(&some, &km).len(), 27);
+    }
+
+    #[test]
+    fn the_last_column_of_a_niphargus_is_the_right_hand_not_the_left() {
+        let b = hand_balance(&heat(0, 13, 4, 14));
+        assert_eq!((b.left_count, b.right_count), (0, 100));
+    }
+
+    #[test]
+    fn the_two_halves_of_a_niphargus_are_mirrored_finger_for_finger() {
+        for (left, right) in [(0, 13), (1, 12), (2, 11), (3, 10), (4, 9), (5, 8), (6, 7)] {
+            let (hl, fl) = hand_finger(0, left, 4, 14);
+            let (hr, fr) = hand_finger(0, right, 4, 14);
+            assert!(hl == Hand::Left && hr == Hand::Right, "columns {left}/{right}");
+            assert!(fl == fr, "columns {left}/{right}");
+        }
+    }
+
+    #[test]
+    fn the_last_row_of_a_niphargus_is_thumbs_on_both_hands() {
+        let f = finger_load(&heat(3, 0, 4, 14));
+        assert_eq!(f.iter().find(|l| l.count > 0).unwrap().name, "Thumb L");
+        let f = finger_load(&heat(3, 13, 4, 14));
+        assert_eq!(f.iter().find(|l| l.count > 0).unwrap().name, "Thumb R");
+    }
+
+    #[test]
+    fn home_row_keys_land_on_their_fingers() {
+        for (col, name) in [(1, "Pinky L"), (2, "Ring L"), (3, "Middle L"), (4, "Index L"), (9, "Index R"), (10, "Middle R")] {
+            let f = finger_load(&heat(1, col, 4, 14));
+            assert_eq!(f.iter().find(|l| l.count > 0).unwrap().name, name, "column {col}");
+        }
+    }
+
+    #[test]
+    fn bigrams_across_the_niphargus_split_alternate_hands() {
+        let lines = ["R0C6 -> R0C7 : 10".to_string(), "R0C0 -> R1C1 : 5".to_string()];
+        let a = analyze_bigrams(&parse_bigram_lines(&lines), 4, 14);
+        assert_eq!(a.alt_hand, 10);
+        assert_eq!(a.same_hand, 5);
+        assert_eq!(a.sfb, 5, "columns 0 and 1 are both the pinky");
+    }
+
+    #[test]
+    fn a_kase_keeps_its_own_rule() {
+        let b = hand_balance(&heat(0, 12, 5, 13));
+        assert_eq!(b.right_count, 100);
+        let f = finger_load(&heat(0, 5, 5, 13));
+        assert_eq!(f.iter().find(|l| l.count > 0).unwrap().name, "Thumb L");
     }
 }
 

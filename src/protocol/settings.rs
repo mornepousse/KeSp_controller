@@ -8,6 +8,13 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     #[serde(default = "default_layout")]
     pub keyboard_layout: String,
+    /// Keyboard model drawn while no keyboard is connected.
+    #[serde(default = "default_board")]
+    pub board: String,
+}
+
+fn default_board() -> String {
+    "kase_v2".to_string()
 }
 
 fn default_layout() -> String {
@@ -18,6 +25,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             keyboard_layout: default_layout(),
+            board: default_board(),
         }
     }
 }

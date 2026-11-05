@@ -124,6 +124,7 @@ fn round2(v: f32) -> f32 {
 }
 
 /// Default layout embedded at compile time.
+#[allow(dead_code)]
 pub fn default_layout() -> Vec<KeycapPos> {
     let json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/default.json"));
     parse_json(json).unwrap_or_default()

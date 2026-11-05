@@ -54,6 +54,17 @@ pub fn classify_connection(rf_pair_list_paired: Option<u8>) -> ConnectionKind {
     }
 }
 
+/// Can the keymap be worked on through this connection? `RF_PAIR_LIST` can't say:
+/// a Niphargus dongle runs the keymap engine itself and answers keymap commands
+/// with `paired_count` 0. So it goes by what the device actually answered. A
+/// keyboard on USB is always reachable: an empty keymap there is a passing error.
+pub fn keyboard_reachable(kind: ConnectionKind, keymap_loaded: bool) -> bool {
+    match kind {
+        ConnectionKind::Direct => true,
+        ConnectionKind::Dongle { .. } => keymap_loaded,
+    }
+}
+
 /// Read timeout for a command. A command FORWARDED through the dongle (the slow
 /// ESP-NOW path) gets double the base; a direct connection, or a dongle-local
 /// command answered by the dongle itself, keeps the base.
@@ -83,6 +94,23 @@ mod tests {
         for cmd in [0x00u8, 0x01, 0x10, 0x20, 0xA0, 0xB0, 0xBF, 0xC4, 0xFF] {
             assert!(!is_dongle_local(cmd), "0x{cmd:02X} should be forwarded");
         }
+    }
+
+    #[test]
+    fn a_dongle_with_no_pairing_but_its_own_keymap_is_reachable() {
+        // What a Niphargus dongle answers: paired_count 0, keymap present.
+        assert!(keyboard_reachable(ConnectionKind::Dongle { paired_count: 0 }, true));
+    }
+
+    #[test]
+    fn a_dongle_that_gives_no_keymap_is_not_reachable_whatever_its_pairing_says() {
+        assert!(!keyboard_reachable(ConnectionKind::Dongle { paired_count: 0 }, false));
+        assert!(!keyboard_reachable(ConnectionKind::Dongle { paired_count: 2 }, false));
+    }
+
+    #[test]
+    fn a_keyboard_on_usb_stays_reachable_after_a_failed_read() {
+        assert!(keyboard_reachable(ConnectionKind::Direct, false));
     }
 
     #[test]

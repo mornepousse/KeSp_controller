@@ -1,0 +1,429 @@
+{
+"version": 1,
+"values": [
+{
+"name": "serial speed",
+"group": "protocol",
+"value": 115200,
+"unit": "baud",
+"source": "function 0x355a07"
+},
+{
+"name": "request frame start",
+"group": "protocol",
+"value": "KS",
+"source": "code 0x3546cb; src/protocol/binary.rs ks_frame"
+},
+{
+"name": "reply frame start",
+"group": "protocol",
+"value": "KR",
+"source": "function 0x3affa3"
+},
+{
+"name": "CRC-8 polynomial",
+"group": "protocol",
+"value": 49,
+"source": "code 0x3546fa and 0x3b0152; src/protocol/binary.rs crc8"
+},
+{
+"name": "reply read timeout",
+"group": "protocol",
+"value": 1500,
+"unit": "ms",
+"source": "code 0x354846; src/protocol/serial/native.rs"
+},
+{
+"name": "read timeout factor through the dongle",
+"group": "protocol",
+"value": 2,
+"source": "src/protocol/connection.rs read_timeout_ms"
+},
+{
+"name": "keyboard USB vendor id",
+"group": "protocol",
+"value": "0xCAFE",
+"source": "function 0x3551a9"
+},
+{
+"name": "SETKEY command",
+"group": "protocol",
+"value": 17,
+"source": "src/protocol/binary.rs cmd::SETKEY 0x11; firmware docs/CDC_BINARY_PROTOCOL.md"
+},
+{
+"name": "tap dance action size",
+"group": "protocol",
+"value": 1,
+"unit": "byte",
+"source": "firmware docs/CDC_BINARY_PROTOCOL.md TD_SET"
+},
+{
+"name": "combo result size",
+"group": "protocol",
+"value": 1,
+"unit": "byte",
+"source": "firmware docs/CDC_BINARY_PROTOCOL.md COMBO_SET"
+},
+{
+"name": "OTA chunk size",
+"group": "firmware update",
+"value": 4096,
+"unit": "bytes",
+"source": "code 0x358e9e; previous src/settings.rs"
+},
+{
+"name": "flash offset factory",
+"group": "firmware update",
+"value": "0x20000",
+"source": "table 0xabe8fa; previous src/flasher.rs"
+},
+{
+"name": "flash offset ota_0",
+"group": "firmware update",
+"value": "0x220000",
+"source": "table 0xabe8fa; previous src/flasher.rs"
+},
+{
+"name": "WPM poll period",
+"group": "timing",
+"value": 5,
+"unit": "s",
+"source": "code 0x38157a; previous src/dispatch.rs"
+},
+{
+"name": "layout auto-refresh period",
+"group": "timing",
+"value": 5,
+"unit": "s",
+"source": "code 0x3816f7; previous src/dispatch.rs"
+},
+{
+"name": "dongle status poll period",
+"group": "timing",
+"value": 1,
+"unit": "s",
+"source": "code 0x381863; previous src/dispatch.rs"
+},
+{
+"name": "dongle battery poll divider",
+"group": "timing",
+"value": 5,
+"source": "previous src/dispatch.rs do_slow"
+},
+{
+"name": "pairing window",
+"group": "timing",
+"value": 30,
+"unit": "s",
+"source": "code 0x35fd9b; previous src/dongle.rs"
+},
+{
+"name": "layout unit",
+"group": "keyboard drawing",
+"value": 50,
+"unit": "px",
+"source": "src/protocol/layout.rs UNIT_PX"
+},
+{
+"name": "fit margin",
+"group": "keyboard drawing",
+"value": 0.95,
+"source": "previous ui/components/keyboard_view.slint"
+},
+{
+"name": "keycap label size",
+"group": "keyboard drawing",
+"value": 11,
+"unit": "pt at scale 1",
+"source": "previous ui/components/key_button.slint"
+},
+{
+"name": "heat step red",
+"group": "keyboard drawing",
+"value": 0.8,
+"source": "code 0x279d46; previous key_button.slint"
+},
+{
+"name": "heat step cold",
+"group": "keyboard drawing",
+"value": 0.05,
+"source": "code 0x27a0b5; previous key_button.slint"
+},
+{
+"name": "window width",
+"group": "window",
+"value": 1000,
+"unit": "pt",
+"source": "code 0x1205b7; previous ui/main.slint"
+},
+{
+"name": "window height",
+"group": "window",
+"value": 700,
+"unit": "pt",
+"source": "code 0x12057c; previous ui/main.slint"
+},
+{
+"name": "connection bar height",
+"group": "window",
+"value": 48,
+"unit": "pt",
+"source": "previous ui/components/connection_bar.slint"
+},
+{
+"name": "status bar height",
+"group": "window",
+"value": 32,
+"unit": "pt",
+"source": "previous ui/components/status_bar.slint"
+},
+{
+"name": "selector width",
+"group": "window",
+"value": 480,
+"unit": "pt",
+"source": "previous ui/components/key_selector.slint"
+},
+{
+"name": "selector height",
+"group": "window",
+"value": 520,
+"unit": "pt",
+"source": "previous ui/components/key_selector.slint"
+},
+{
+"name": "mod-tap base code",
+"group": "keycodes",
+"value": "0x5000",
+"source": "function 0x340acf, table 0xa88090"
+},
+{
+"name": "layer-tap base code",
+"group": "keycodes",
+"value": "0x4000",
+"source": "function 0x338636"
+},
+{
+"name": "shifted symbol base code",
+"group": "keycodes",
+"value": "0x8200",
+"source": "function 0x3a4c2f at 0x3a506c; previous src/models.rs"
+},
+{
+"name": "Sec Confirm code",
+"group": "keycodes",
+"value": "0x3E00",
+"source": "code 0x344667; function 0x3a4c2f"
+},
+{
+"name": "macro delay step code",
+"group": "keycodes",
+"value": 255,
+"source": "function 0x33871f"
+},
+{
+"name": "tamagotchi XP base",
+"group": "stats",
+"value": 500,
+"source": "function 0x26a99e"
+},
+{
+"name": "tamagotchi XP per level",
+"group": "stats",
+"value": 250,
+"source": "function 0x26a99e"
+},
+{
+"name": "top keys shown",
+"group": "stats",
+"value": 10,
+"source": "previous src/dispatch.rs top_keys"
+},
+{
+"name": "stale battery age",
+"group": "dongle",
+"value": 60000,
+"unit": "ms",
+"source": "src/protocol/parsers.rs is_stale"
+},
+{
+"name": "KaSe V2 keys",
+"group": "models",
+"value": 64,
+"source": "firmware boards/kase_layout.inc"
+},
+{
+"name": "KaSe V2 rows",
+"group": "models",
+"value": 5,
+"source": "firmware boards/kase_v2/board.h"
+},
+{
+"name": "KaSe V2 columns",
+"group": "models",
+"value": 13,
+"source": "firmware boards/kase_v2/board.h"
+},
+{
+"name": "Niphargus keys",
+"group": "models",
+"value": 52,
+"source": "firmware boards/niphar_layout.inc"
+},
+{
+"name": "Niphargus rows",
+"group": "models",
+"value": 4,
+"source": "firmware boards/niphar_left/board.h"
+},
+{
+"name": "Niphargus columns",
+"group": "models",
+"value": 14,
+"source": "firmware boards/niphar_left/board.h KEYMAP_COLS"
+},
+{
+"name": "layers",
+"group": "models",
+"value": 10,
+"source": "firmware main/input/keyboard_config.h"
+},
+{
+"name": "empty key falls back to",
+"group": "models",
+"value": "the layer it was reached from",
+"source": "firmware main/input/key_processor.c:451"
+},
+{
+"name": "empty key preview layer",
+"group": "editor",
+"value": "base layer",
+"estimated": true
+},
+{
+"name": "keymap undo depth",
+"group": "editor",
+"value": 200,
+"estimated": true
+},
+{
+"name": "layout undo depth",
+"group": "editor",
+"value": 100,
+"estimated": true
+},
+{
+"name": "default grid step",
+"group": "editor",
+"value": 0.25,
+"unit": "u",
+"estimated": true
+},
+{
+"name": "rotation step with grid on",
+"group": "editor",
+"value": 5,
+"unit": "deg",
+"estimated": true
+},
+{
+"name": "palette height",
+"group": "editor",
+"value": 176,
+"unit": "pt",
+"estimated": true
+},
+{
+"name": "Mod-Tap modifiers offered",
+"group": "keycodes",
+"value": 4,
+"source": "firmware K_MT_MOD keeps 4 bits; original table 0xa88090 breaks the right-hand ones"
+},
+{
+"name": "port timeout",
+"group": "protocol",
+"value": 300,
+"unit": "ms",
+"source": "function 0x355a07; src/protocol/serial/native.rs CONNECT_TIMEOUT_MS"
+},
+{
+"name": "dongle reachable when",
+"group": "protocol",
+"value": "it answers with a keymap",
+"source": "real dongle answers; firmware CONFIG_KASE_DONGLE_FUSION"
+},
+{
+"name": "Niphargus right column",
+"group": "stats",
+"value": "13 - keymap column",
+"source": "firmware half_col_to_keymap, boards/niphar_left/board_keymap.c"
+},
+{
+"name": "Niphargus thumb row",
+"group": "stats",
+"value": "last row",
+"source": "firmware boards/niphar_layout.inc"
+},
+{
+"name": "one-shot mod base code",
+"group": "keycodes",
+"value": "0x3000",
+"source": "firmware K_OSM_BASE"
+},
+{
+"name": "layer + mod base code",
+"group": "keycodes",
+"value": "0x7000",
+"source": "firmware K_LM_BASE"
+},
+{
+"name": "mod + key base code",
+"group": "keycodes",
+"value": "0x8000",
+"source": "firmware K_MK_BASE"
+},
+{
+"name": "macro keys pressed together",
+"group": "protocol",
+"value": 6,
+"source": "firmware cdc_binary_cmds.c:777 bin_cmd_macro_add"
+},
+{
+"name": "tap dance slots",
+"group": "firmware limits",
+"value": 16,
+"source": "firmware TAP_DANCE_MAX_SLOTS"
+},
+{
+"name": "macro slots",
+"group": "firmware limits",
+"value": 20,
+"source": "firmware MAX_MACROS"
+},
+{
+"name": "macro steps",
+"group": "firmware limits",
+"value": 24,
+"source": "firmware MACRO_MAX_STEPS"
+},
+{
+"name": "macro name bytes",
+"group": "firmware limits",
+"value": 15,
+"source": "firmware MAX_MACRO_NAME_LENGTH - 1"
+},
+{
+"name": "combo, leader and override slots",
+"group": "firmware limits",
+"value": 16,
+"source": "firmware COMBO_MAX_SLOTS, LEADER_MAX_ENTRIES, KEY_OVERRIDE_MAX_SLOTS"
+},
+{
+"name": "browser USB vendor filter",
+"group": "browser",
+"value": "0xCAFE, 0x303A",
+"estimated": true
+}
+]
+}

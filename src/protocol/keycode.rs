@@ -110,6 +110,14 @@ pub fn decode_keycode(raw: u16) -> String {
         return format!("TD {index}");
     }
 
+    // --- LM (Layer + Mod): 0x7000..=0x7FFF ---
+    //     layout: 0x7MML  where MM = mods (8 bits), L = layer (firmware K_LM).
+    if (0x7000..=0x7FFF).contains(&raw) {
+        let layer = raw & 0x0F;
+        let mods = ((raw >> 4) & 0xFF) as u8;
+        return format!("LM {} {}", layer, mod_name(mods));
+    }
+
     // --- MK (Modified Key): 0x8000..=0x8FFF ---
     //     layout: 0x8MKK  where M = mod nibble (4 bits), KK = HID keycode.
     //     One press sends mod + key together (firmware K_MK). Shift on a key
