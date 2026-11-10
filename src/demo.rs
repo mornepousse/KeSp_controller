@@ -119,9 +119,14 @@ pub fn load(app: &mut App) {
     app.dongle.mac_left = "AA:BB:CC:00:11:22".into();
     app.dongle.mac_right = "—".into();
     app.dongle.paired = 1;
-    app.dongle.rf.link_left = true;
-    app.dongle.rf.sig_left = 210;
-    app.dongle.rf.hb_age_left_ms = 1000;
-    app.dongle.rf.pkt_rx_left = 1832;
-    app.dongle.rf.pkt_dup_left = 4;
+    app.dongle.rf.link_kbd = true;
+    app.dongle.rf.sig_kbd = 210;
+    app.dongle.rf.age_kbd_ms = 1000;
+    app.dongle.rf.pkt_rx_kbd = 1832;
+    app.dongle.rf.pkt_dup_kbd = 4;
+    app.dongle.rf.radios_present = Some((true, true));
+    app.dongle.rf.halves = Some([
+        parsers::HalfLink { age_ms: 1000, frames: 1204, link_q: 4 },
+        parsers::HalfLink { age_ms: 12000, frames: 628, link_q: 35 },
+    ]);
 }

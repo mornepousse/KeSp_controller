@@ -12,7 +12,7 @@ pub enum Hand {
 }
 
 /// Which finger a column belongs to.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Finger {
     Pinky,
     Ring,
@@ -35,7 +35,7 @@ pub fn row_labels(rows: usize) -> Vec<String> {
 }
 
 /// Finger names (French).
-const FINGER_NAMES: [&str; 5] = ["Pinky", "Ring", "Middle", "Index", "Thumb"];
+pub const FINGER_NAMES: [&str; 5] = ["Pinky", "Ring", "Middle", "Index", "Thumb"];
 
 /// Map column index → (Hand, Finger).
 /// KaSe layout: cols 0-5 = left hand, cols 6 (gap), cols 7-12 = right hand.
@@ -63,7 +63,7 @@ fn col_to_hand_finger(col: usize) -> (Hand, Finger) {
 /// (4 rows, 7 columns per half) follows the firmware: its right half is the same
 /// board flipped, physical column = 13 - keymap column (`half_col_to_keymap`),
 /// fingers read on the factory home row Esc A S D F G ], last row = thumbs.
-fn hand_finger(row: usize, col: usize, rows: usize, cols: usize) -> (Hand, Finger) {
+pub fn hand_finger(row: usize, col: usize, rows: usize, cols: usize) -> (Hand, Finger) {
     if rows != 4 || (cols != 7 && cols != 14) {
         return col_to_hand_finger(col);
     }

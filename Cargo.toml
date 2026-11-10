@@ -1,6 +1,6 @@
 [package]
 name = "kesp-controller"
-version = "3.0.0-beta.1"
+version = "3.0.0-beta.2"
 edition = "2021"
 license = "GPL-3.0"
 description = "Configurateur egui pour le clavier split KeSp"

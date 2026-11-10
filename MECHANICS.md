@@ -133,6 +133,33 @@ dongle runs the keymap engine itself (`CONFIG_KASE_DONGLE_FUSION`). The previous
 keyboard", which greyed out Keymap, Advanced, Macros and Stats. A dongle now counts as reachable when it
 answers with a keymap, and the pair list only says what it says.
 
+### Who the radio link is really about
+
+`RF_STATUS` was read as "left half, right half" (that is what `CDC_DONGLE_INTEGRATION.md`, the 27-byte form and
+the field names still say). The firmware's `bin_cmd_rf_status` and `rf_slot.h` say otherwise: the dongle's two
+slots are the keyboard, which both halves share, and the Conchodytes mouse. The real dongle answers 51 bytes,
+flags `0x0D`, keyboard 7963 packets, mouse 0, while the right half's battery sample is under 2 s old. So
+"Right half: not linked" was the missing mouse. The pair list's `mac_left` and `mac_right` are those same two
+slots (`rf_slot.h` keeps the old key names so nothing has to be paired again).
+
+The card shows the keyboard and the mouse, then each half. Since the firmware's `rf_half_seen` (uncommitted when
+read, already on the real dongle), `RF_STATUS` is 69 bytes: bytes 51..58 give each half's age, 59..66 its frames,
+67 and 68 the retransmission percentage it last reported, `0xFF` before its first STATUS. The real dongle gave
+left 3521 ms, 525 frames, 0 %, and right 20605 ms, 356 frames, 0 %. A 51-byte reply has none of this, so the card
+then falls back on the age of the battery sample (`dongle_cache_get_battery`).
+
+A half's bars use the retry factor of `rf_signal_q255`, `255 x (100 - retries) / 100`, with the usual thresholds
+200, 140, 80, 30. Its age factor is left out on purpose: a half at rest sends nothing (the firmware's protocol
+document says a growing age is normal), so that factor would read 0 on a healthy half. Past 60 s without a frame,
+the half reads "asleep or out of range" with no bars, because its last figure is old by then. It is not a radio
+strength: the nRF24 has no such measure. Until this firmware, every STATUS sent `link_q = 0`, so the slot's signal
+was age alone: `255 x (1500 - age) / 1500` gives 184 at 415 ms and 129 at 736 ms, the values the real dongle read.
+
+The keyboard slot drops soon after the last frame, so it reads "idle" rather than a red "not linked" while a half
+was heard recently. Flags bits 2 and 3 say whether each radio module is mounted, which tells a missing module from
+a mouse out of range. A slot that never received anything reads "not seen", not as a failure, because its age only
+counts from startup. With `paired_count` 0 the link runs on factory settings (`rf_pairing.c`).
+
 A reply now ends its wait as soon as the frame is complete. It used to wait for a port timeout of silence
 each time: 300 ms per key written, 17 s to paste a Niphargus layer.
 
@@ -225,6 +252,9 @@ checked at `0x3455e5`; flags bit 0 left and bit 1 right), battery at `0x345309` 
 `0x345231`; two slots of 7 bytes), pair list (13 bytes at least, `0x3b1084`), pair start (3 bytes at least,
 `0x35fa7c`), signal bars at `0x345f90` (200, 140, 80, 30). Ghidra's pseudocode for this block was no use: it stops
 at the first call it wrongly treats as never returning.
+The 60 s limit of an old battery reading is at `0x345bac`, for the right half at `0x345c37`, written as one
+comparison: age + `0xffff159f` below `0xffff159e`, which is true above 60000 ms and false for the "never" value.
+Ghidra has no function there either. `HALF_HEARD_MS` keeps that number.
 
 ## Tried on real hardware
 
@@ -237,3 +267,99 @@ The serial code also runs against a fake firmware on a pseudo-terminal in the te
 against simulated mouse and keyboard. These haven't run for real in this version: saving a macro, combo, tap
 dance, override or leader sequence, restoring a config (including macros with `MACRO_ADD`), OTA, flashing,
 pairing, the matrix test and the resets.
+
+## Practice tab
+
+Touch typing on the keyboard's own keymap. What exists was looked at first: keybr.com's README says it starts
+with a small set of the language's most frequent letters, adds more once the target speed is reached with the
+current ones, and focuses lessons on the weakest keys; TypingClub grades lessons with stars and shows the hand
+posture on every key; ngram-type drills bigrams and common words against speed and accuracy thresholds.
+
+The tab follows keybr's method, but on this keymap: the letters are those it can type, read from each key's
+label on the computer's layout (the first sign of an AZERTY "é 2"), a layer-tap or mod-tap counting by its tap.
+A character on another layer is shown with the base-layer key that holds that layer (`checks::layer_target`); a
+layer nothing holds is left out. The next key, its finger (the firmware's Niphargus rule, the KaSe one otherwise,
+with thumbs only on the last row) and the key to hold are lit on the board.
+
+- Start with the 6 most frequent letters of English (`etaoinshrdlcumwfgypbvkjxqz`) or French
+  (`esaitnrulodcpmévqfbghjàxèyêzwçùkœ`) this keymap has.
+- Words per minute count 5 characters a word, so 30 wpm is 400 ms a key (`12000 / wpm`).
+- A letter is known after 10 presses, at or above the target speed, with at most 5% misses. Its speed and
+  misses are running averages that weigh the newest press 0.1. A gap over 2 s is a pause, not a key's time,
+  and a key typed after a mistake doesn't time either.
+- After each line, if every letter in play is known, the next one comes in. The focus letter is the slowest one
+  not known yet; it is in about 6 words out of 10.
+- Lines are 48 characters: real words from a built-in list once 12 of them fit the letters in play, made-up
+  words otherwise, letter by letter weighted by how often each letter follows the previous one in the list.
+- A wrong key counts once against the letter wanted and doesn't move on; the key typed lights red for 0.3 s.
+- Three modes: Letters (the keybr method above), Words (real words with every letter, no new letter), and
+  Symbols (the keymap's signs and digits in groups of 2 to 4, the focus one in about 3 of 10, with their own
+  record apart from any language). A shifted sign of the firmware (`0x82KK`) counts only where the layout can
+  name it (`layout_remap::shifted_label`: "!" on QWERTY, "Shift+1" elsewhere, left out).
+- A sign on another layer is shown with a plain hold (MO, LT, OSL) before a layer-mod key (LM): LM adds its
+  modifier, so the sign would leave as a shortcut. On the real Niphargus, layer 2 is held by MO 2, not LM 2 GUI.
+- Options: finger colours on every key (thumbs only on the last row), blank keycaps, live speed under the line,
+  and each letter's speed, accuracy and presses on hover.
+- A wrong key counts once against the letter wanted and doesn't move on. Progress per language is kept in
+  `kase_settings.json` (the browser's storage on the web).
+
+Only the keybr method itself is sourced. The numbers (6 letters, 30 wpm, 10 presses, 5%, 0.1, 2 s, 48, 12) are
+choices, marked estimated in the values file.
+
+### The game
+
+TypingClub's stars and levels, with the keyboard's own numbers where it has them.
+
+- Stars per line, 1 to 5: finished, 90% right, 97% right, three quarters of the target speed, the target speed.
+- Experience: each character once per star, plus up to as much again for the longest run of keys without a
+  mistake in the line (full bonus at 100). Levels use the keyboard's Tamagotchi rule, `level x 250 + 500`
+  experience to the next one (read in the original at `0x26a99e`, as on the Typing tab).
+- The combo counts keys without a mistake across lines and shows from 10, warming from cyan to orange.
+- Daily goal 10 lines. A streak counts days with at least one line (UTC days) and lasts until a whole day passes
+  without one. 15 badges, each earned once: first line, five stars, a spotless line, combos of 50 and 200, 40,
+  60 and 80 wpm, full alphabet, every sign known, daily goal, 3 and 7 days, 100 lines, level 10.
+- All of it is kept in the settings file with the rest of the Practice progress; tests never touch that file.
+
+### Sprint and progress chart
+
+- Sprint, as on Monkeytype's timed tests: 60 seconds of real words, the clock starting with the first key. Its
+  speed counts the right keys over the minute; it earns stars and experience like a line, keeps a record and a
+  Sprinter badge, and has its own record per language. Lines end when typed; the clock ends the sprint.
+- Words and Sprint lines are only real words from the list once 12 fit; Letters mixes made-up words in.
+- A chart shows the speed of the latest 60 lines of the mode against the target, as keybr's progress graphs do.
+
+### Bigrams
+
+As ngram-type drills bigrams: every pair of letters is timed on its second key, in every mode, and kept with the
+letters (`pairs`). The Bigrams mode trains 5 pairs: the slowest measured ones not known yet (3 times at least),
+then the language's common pairs from the word list. Pairs typed by one finger on this keymap come first and are
+outlined in orange: two different base-layer keys under the same finger of the same hand, by the finger rule
+above. A line is real words holding those pairs, or the pair doubled when no word has it. On the real Niphargus
+in French, the five were ui, ux, vr, ix and mb, all one-finger pairs.
+
+### Capitals, punctuation and slips
+
+- Capitals & punctuation (Words and Sprint): sentences of 3 to 6 words, a capital to start, a comma now and then
+  (1 in 6 words) and a full stop to end, each only if the keymap types it. The Shift for capitals is found on the
+  base layer: a plain Shift (`0xE1`, `0xE5`) first, then a one-shot Shift (`0x3000` with `0x22`), then a mod-tap
+  with Shift (a home-row mod). It lights in purple with its finger, like a layer key. On the real Niphargus it is
+  LShift, left thumb.
+- A capital counts for its letter in the statistics and pairs; a small letter where a capital is wanted is a miss.
+- Slips: each wrong key is kept once per place as "wanted, typed" ("tr": r typed for t). The ones made twice or
+  more are listed, the most frequent first.
+
+## Settings file
+
+The original keeps `kase_settings.json` next to the program, or in `.` (function `0x36cdc5`). An install in a
+read-only folder (Nix store, `/usr`) lost every save there, the Practice progress included. It now lives in the
+user's config folder: `$XDG_CONFIG_HOME` or `~/.config` on Linux, `%APPDATA%` on Windows,
+`~/Library/Application Support` on macOS, in `kesp-controller/`. The old file is read when the new one doesn't
+exist yet, and saving falls back to it if the folder can't be written. Tests use a temporary folder.
+
+## Safety
+
+- Writing a configuration file to the keyboard asks first.
+- The macro editor warns when several keys have no pause between them: the firmware then holds them together
+  as one shortcut (`key_processor.c`, `expand_macro`: a macro with no delay step is played as held keys).
+- While disconnected, the desktop app looks at the ports every 2 s and connects to one that wasn't there at the
+  last look. Ports present at start, or after a Disconnect, are not retried.

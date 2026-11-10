@@ -369,7 +369,7 @@ impl Backend {
             }
             match ser.send_binary(cmd::RF_PAIR_RESET, &[]) {
                 Ok(_) => {
-                    tx.send(BgMsg::Status("Paired halves cleared".into()));
+                    tx.send(BgMsg::Status("Pairing forgotten".into()));
                     fetch_pair_list(ser, tx);
                 }
                 Err(e) => tx.send(BgMsg::StatusError(format!("RF_PAIR_RESET: {e}"))),
@@ -834,7 +834,7 @@ fn run_pairing(serial: Arc<Mutex<SerialManager>>, tx: Tx) {
             }
         }
     }
-    tx.send(BgMsg::PairResult(Err("Timeout — no half completed the handshake in 30 s".into())));
+    tx.send(BgMsg::PairResult(Err("Timeout — nothing completed the handshake in 30 s".into())));
 }
 
 

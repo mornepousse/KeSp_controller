@@ -261,6 +261,70 @@ fn every_page_of_every_tab_draws_with_data() {
 }
 
 #[test]
+fn the_radio_card_shows_each_half_from_its_own_figures() {
+    let mut h = demo_harness(Tab::Device);
+    h.state_mut().is_dongle = true;
+    h.run_steps(2);
+    assert!(h.query_by_label_contains("1204 frames, 4% retries").is_some());
+    assert!(h.query_by_label_contains("628 frames, 35% retries").is_some());
+    assert!(h.query_by_label_contains("heard 12 s ago").is_some());
+}
+
+#[test]
+fn the_radio_card_says_so_when_the_firmware_has_no_figures_per_half() {
+    let mut h = demo_harness(Tab::Device);
+    h.state_mut().is_dongle = true;
+    h.state_mut().dongle.rf.halves = None;
+    h.run_steps(2);
+    assert!(h.query_by_label_contains("frames,").is_none());
+    assert!(h.query_by_label_contains("doesn't report each half").is_some());
+}
+
+#[test]
+fn a_keyboard_at_rest_reads_idle_while_a_half_was_just_heard() {
+    let mut h = demo_harness(Tab::Device);
+    h.state_mut().is_dongle = true;
+    h.state_mut().dongle.rf.link_kbd = false;
+    h.run_steps(2);
+    assert!(h.query_by_label_contains("idle").is_some());
+    assert!(h.query_by_label_contains("not linked").is_none());
+}
+
+#[test]
+fn practice_moves_on_with_the_right_key_only() {
+    let mut h = demo_harness(Tab::Practice);
+    h.run_steps(2);
+    let want = h.state().practice.as_ref().and_then(|s| s.expected()).expect("a line to type");
+    let wrong = if want == 'z' { 'q' } else { 'z' };
+    h.event(egui::Event::Text(wrong.to_string()));
+    h.run_steps(2);
+    assert_eq!(h.state().practice.as_ref().unwrap().pos, 0);
+    h.event(egui::Event::Text(want.to_string()));
+    h.run_steps(2);
+    assert_eq!(h.state().practice.as_ref().unwrap().pos, 1);
+    assert!(h.query_by_label_contains("Next:").is_some());
+}
+
+#[test]
+fn a_finished_practice_line_shows_its_reward() {
+    let mut h = demo_harness(Tab::Practice);
+    h.run_steps(2);
+    // The reward is drawn below the keyboard, out of this small window otherwise.
+    h.state_mut().practice.as_mut().unwrap().save.show_keyboard = false;
+    let text: String = h.state().practice.as_ref().unwrap().text.iter().collect();
+    for c in text.chars() {
+        h.event(egui::Event::Text(c.to_string()));
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+    let s = h.state().practice.as_ref().unwrap();
+    let xp = s.last.as_ref().expect("the line was finished").reward.xp;
+    assert!(s.save.game.total_lines >= 1);
+    assert!(h.query_by_label(&format!("+{xp} XP")).is_some());
+    assert!(h.query_by_label_contains("Badge earned: First line").is_some());
+}
+
+#[test]
 fn the_page_list_on_the_side_switches_page() {
     use crate::app::Behavior;
     let mut h = demo_harness(Tab::Behaviors);

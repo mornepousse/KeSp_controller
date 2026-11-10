@@ -225,6 +225,16 @@ fn macros(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
         });
+        // The firmware holds every key of a macro with no pause together, as one
+        // shortcut (key_processor.c, expand_macro): fine for Ctrl+C, not for a word.
+        let keys_only = app.mac.steps.iter().filter(|s| s.0 != 0xFF).count();
+        if keys_only > 1 && app.mac.steps.iter().all(|s| s.0 != 0xFF) {
+            ui.label(
+                RichText::new("With no pause, these keys are pressed together, as one shortcut. Add a pause to type them one after another.")
+                    .size(11.0)
+                    .color(theme::ORANGE),
+            );
+        }
         let too_long = app.mac.steps.len() > keys::MACRO_STEPS;
         if too_long {
             ui.label(

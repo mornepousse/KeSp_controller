@@ -10,6 +10,8 @@ mod checks;
 mod demo;
 mod editor;
 mod keys;
+mod practice;
+mod practice_game;
 mod protocol;
 mod shape;
 mod theme;
@@ -20,6 +22,7 @@ mod ui_keymap;
 mod ui_layout;
 mod ui_selector;
 mod ui_typing;
+mod ui_practice;
 #[cfg(test)]
 mod ui_tests;
 

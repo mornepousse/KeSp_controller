@@ -41,7 +41,7 @@ pub struct Input<'a> {
 }
 
 /// Layer a key switches to, and whether it stays there after release.
-fn layer_target(code: u16) -> Option<(usize, bool)> {
+pub fn layer_target(code: u16) -> Option<(usize, bool)> {
     let low_zero = code & 0xFF == 0;
     match code {
         0x0100..=0x0A00 if low_zero => Some(((code >> 8) as usize - 1, false)),

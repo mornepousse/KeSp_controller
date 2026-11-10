@@ -23,11 +23,12 @@ pub enum Tab {
     Layout,
     Behaviors,
     Typing,
+    Practice,
     Device,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [Tab::Keymap, Tab::Layout, Tab::Behaviors, Tab::Typing, Tab::Device];
+    pub const ALL: [Tab; 6] = [Tab::Keymap, Tab::Layout, Tab::Behaviors, Tab::Typing, Tab::Practice, Tab::Device];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -35,6 +36,7 @@ impl Tab {
             Tab::Layout => "Layout",
             Tab::Behaviors => "Behaviors",
             Tab::Typing => "Typing",
+            Tab::Practice => "Practice",
             Tab::Device => "Device",
         }
     }
@@ -107,12 +109,15 @@ pub enum DragItem {
 }
 
 pub enum Action {
+    /// A configuration file, written once the person confirms.
+    ImportConfig(Box<config_io::KeyboardConfig>),
     NvsReset(u8),
     Flash { port: String, path: String, offset: u32 },
     Ota(String),
     ResetPairing,
     SendPending,
     RestoreFactoryLayer,
+    ResetPractice,
 }
 
 pub struct Confirm {
@@ -247,6 +252,8 @@ pub struct App {
     pub kb_layout: KeyboardLayout,
     pub catalog: Vec<KeyEntry>,
     pub doc: KeymapDoc,
+    /// The Practice tab's session, made on its first visit.
+    pub practice: Option<crate::practice::Session>,
 
     pub selected: Option<usize>,
     pub capture: bool,
@@ -294,6 +301,10 @@ pub struct App {
     next_wpm: Instant,
     next_layout: Instant,
     next_dongle: Instant,
+    /// While disconnected, the ports seen at the last look: a new one is connected to.
+    watch_ports: bool,
+    next_port_scan: Instant,
+    seen_ports: Vec<String>,
     dongle_tick: u32,
 
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -311,6 +322,8 @@ const SCREENSHOT_FRAME: u32 = 120;
 const WPM_PERIOD: Duration = Duration::from_secs(5);
 const LAYOUT_PERIOD: Duration = Duration::from_secs(5);
 const DONGLE_PERIOD: Duration = Duration::from_secs(1);
+/// How often the ports are looked at while disconnected, to catch a keyboard plugged in.
+const PORT_SCAN_PERIOD: Duration = Duration::from_secs(2);
 
 impl App {
     pub fn new(opt: Options) -> Self {
@@ -352,6 +365,7 @@ impl App {
             catalog: keys::catalog(&kb_layout),
             kb_layout,
             doc: KeymapDoc::default(),
+            practice: None,
             selected: None,
             capture: false,
             tint: true,
@@ -405,6 +419,9 @@ impl App {
             next_wpm: Instant::now() + WPM_PERIOD,
             next_layout: Instant::now() + LAYOUT_PERIOD,
             next_dongle: Instant::now() + DONGLE_PERIOD,
+            watch_ports: opt.auto_connect && !opt.demo && opt.screenshot.is_none(),
+            next_port_scan: Instant::now() + PORT_SCAN_PERIOD,
+            seen_ports: Vec::new(),
             dongle_tick: 0,
             screenshot: opt.screenshot,
             frames: 0,
@@ -412,6 +429,9 @@ impl App {
             themed: false,
         };
         app.layout_ed.cols = app.boards[board].cols;
+        // Only a port that comes after this counts as plugged in: a Disconnect or a
+        // port that won't answer must not be retried every few seconds.
+        app.seen_ports = app.ports.iter().map(|p| p.0.clone()).collect();
         app.load_factory_keymap();
         if opt.demo {
             crate::demo::load(&mut app);
@@ -983,7 +1003,7 @@ impl App {
             BgMsg::PairResult(r) => {
                 self.dongle.pair_countdown = None;
                 self.dongle.pair_status = match r {
-                    Ok(n) => format!("Half paired ✓ (total: {n})"),
+                    Ok(n) => format!("Paired ✓ (total: {n})"),
                     Err(e) => e,
                 };
             }
@@ -1027,10 +1047,15 @@ impl App {
         match target {
             PickTarget::ConfigImport => match config_io::KeyboardConfig::from_json(&text) {
                 Ok(config) => {
-                    self.config.busy = true;
-                    self.config.progress = 0.0;
-                    self.config.status = "Importing config...".into();
-                    self.be.import_config(config, self.config_bits());
+                    self.confirm = Some(Confirm {
+                        title: "Write this file to the keyboard?".into(),
+                        body: format!(
+                            "{name} replaces what is on the keyboard for the parts checked. \
+                             Export a backup first if you may want the current setup back."
+                        ),
+                        ok: "Write it".into(),
+                        action: Action::ImportConfig(Box::new(config)),
+                    });
                 }
                 Err(e) => self.config.status = format!("Error: Parse error: {e}"),
             },
@@ -1060,6 +1085,22 @@ impl App {
                 }
             }
         }
+        if self.watch_ports && self.conn == Conn::Disconnected && now >= self.next_port_scan {
+            self.next_port_scan = now + PORT_SCAN_PERIOD;
+            let ports = backend::list_ports();
+            let names: Vec<String> = ports.iter().map(|p| p.0.clone()).collect();
+            let arrived = names.iter().any(|n| !self.seen_ports.contains(n));
+            if names != self.seen_ports {
+                self.ports = ports;
+                self.port_idx = 0;
+            }
+            self.seen_ports = names;
+            if arrived {
+                self.status = "Keyboard plugged in, connecting...".into();
+                self.conn = Conn::Connecting;
+                self.be.connect(None);
+            }
+        }
         if self.online() && self.is_dongle && now >= self.next_dongle {
             self.next_dongle = now + DONGLE_PERIOD;
             let slow = self.dongle_tick.is_multiple_of(5);
@@ -1074,6 +1115,18 @@ impl App {
             Action::ResetPairing => self.be.dongle_reset_pairing(),
             Action::SendPending => self.send_pending(),
             Action::RestoreFactoryLayer => self.restore_factory_layer(),
+            Action::ImportConfig(config) => {
+                self.config.busy = true;
+                self.config.progress = 0.0;
+                self.config.status = "Importing config...".into();
+                self.be.import_config(*config, self.config_bits());
+            }
+            Action::ResetPractice => {
+                if let Some(s) = &mut self.practice {
+                    s.reset_progress();
+                    crate::ui_practice::store(s);
+                }
+            }
             Action::Ota(path) => match std::fs::read(&path) {
                 Ok(firmware) => {
                     self.ota.busy = true;
@@ -1138,8 +1191,9 @@ impl App {
                 }
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(RichText::new(&self.firmware).color(theme::FG_MUTED));
-                ui.label(RichText::new(&self.mode_label).color(theme::FG_MUTED));
+                // A firmware name can be long: it gets cut here, Device > Status has it in full.
+                let text = format!("{}   {}", self.mode_label, self.firmware);
+                ui.add(egui::Label::new(RichText::new(text.trim()).color(theme::FG_MUTED)).truncate());
             });
         });
     }
@@ -1356,6 +1410,8 @@ impl App {
         self.run_timers();
         if self.online() || self.layout_ed.auto_refresh {
             ctx.request_repaint_after(Duration::from_millis(500));
+        } else if self.watch_ports {
+            ctx.request_repaint_after(PORT_SCAN_PERIOD);
         }
 
         let bar = Frame::new().fill(theme::BG_SECONDARY);
@@ -1382,6 +1438,7 @@ impl App {
                 Tab::Layout => crate::ui_layout::show(self, ui),
                 Tab::Behaviors => crate::ui_behaviors::show(self, ui),
                 Tab::Typing => crate::ui_typing::show(self, ui),
+                Tab::Practice => crate::ui_practice::show(self, ui),
                 Tab::Device => crate::ui_device::show(self, ui),
             });
 

@@ -6,7 +6,7 @@ use crate::backend::{self, PickTarget};
 use crate::shape::View;
 use crate::theme;
 use crate::ui_common::{card, note, page_head, paint_key, primary, progress, section, side_nav, CapStyle};
-use egui::{vec2, Frame, RichText, Sense, Stroke};
+use egui::{vec2, Color32, Frame, RichText, Sense, Stroke};
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let items = [
@@ -67,10 +67,34 @@ fn status(app: &mut App, ui: &mut egui::Ui) {
     card(ui, |ui| {
         ui.label(RichText::new("Radio link").size(13.0).color(theme::CYAN));
         let rf = &app.dongle.rf;
+        let (radio_kbd, radio_mouse) = match rf.radios_present {
+            Some((k, m)) => (Some(k), Some(m)),
+            None => (None, None),
+        };
+        // The slot drops soon after the last frame, while a half at rest stays fine.
+        let kbd_idle = rf.halves.is_some_and(|h| h.iter().any(|h| h.heard_recently()));
         ui.columns(2, |c| {
-            link_side(&mut c[0], "Left half", rf.link_left, rf.sig_left, rf.hb_age_left_ms, rf.pkt_rx_left, rf.pkt_dup_left);
-            link_side(&mut c[1], "Right half", rf.link_right, rf.sig_right, rf.hb_age_right_ms, rf.pkt_rx_right, rf.pkt_dup_right);
+            link_slot(&mut c[0], "Keyboard", radio_kbd, kbd_idle, rf.link_kbd, rf.sig_kbd, rf.age_kbd_ms, rf.pkt_rx_kbd, rf.pkt_dup_kbd);
+            link_slot(&mut c[1], "Mouse", radio_mouse, false, rf.link_mouse, rf.sig_mouse, rf.age_mouse_ms, rf.pkt_rx_mouse, rf.pkt_dup_mouse);
         });
+        ui.separator();
+        match rf.halves {
+            Some([left, right]) => {
+                ui.columns(2, |c| {
+                    half_link(&mut c[0], "Left half", &left);
+                    half_link(&mut c[1], "Right half", &right);
+                });
+                note(ui, "Each half's bars show the retransmissions it last reported. A half at rest sends nothing, and reports every 30 s or so while awake.");
+            }
+            None => {
+                let b = app.dongle.battery.as_ref();
+                ui.columns(2, |c| {
+                    half_heard(&mut c[0], "Left half", b.map(|b| &b.left));
+                    half_heard(&mut c[1], "Right half", b.map(|b| &b.right));
+                });
+                note(ui, "This firmware doesn't report each half's link, only when its battery was last read. Update the dongle to see more.");
+            }
+        }
     });
     card(ui, |ui| {
         ui.label(RichText::new("Battery").size(13.0).color(theme::CYAN));
@@ -82,7 +106,10 @@ fn status(app: &mut App, ui: &mut egui::Ui) {
     });
     card(ui, |ui| {
         ui.label(RichText::new("Pairing").size(13.0).color(theme::CYAN));
-        note(ui, &format!("Paired halves: {} / 2   L: {}   R: {}", app.dongle.paired, app.dongle.mac_left, app.dongle.mac_right));
+        note(ui, &format!("Paired: {} / 2   Keyboard: {}   Mouse: {}", app.dongle.paired, app.dongle.mac_left, app.dongle.mac_right));
+        if app.dongle.paired == 0 && app.dongle.rf.link_kbd {
+            note(ui, "No saved pairing: this link runs on the radio's factory settings.");
+        }
         ui.horizontal(|ui| {
             let active = app.dongle.pair_countdown;
             let label = match active {
@@ -96,8 +123,8 @@ fn status(app: &mut App, ui: &mut egui::Ui) {
             }
             if ui.add_enabled(usable, egui::Button::new("Reset paired")).clicked() {
                 app.confirm = Some(Confirm {
-                    title: "Forget the paired halves?".into(),
-                    body: "The dongle forgets both halves. They will have to be paired again.".into(),
+                    title: "Forget what is paired?".into(),
+                    body: "The dongle forgets the keyboard and the mouse. They will have to be paired again.".into(),
                     ok: "Forget them".into(),
                     action: Action::ResetPairing,
                 });
@@ -119,17 +146,74 @@ fn signal_bars(ui: &mut egui::Ui, bars: u8) {
     }
 }
 
-fn link_side(ui: &mut egui::Ui, name: &str, up: bool, sig: u8, hb_ms: u32, rx: u32, dup: u32) {
+fn dot(ui: &mut egui::Ui, color: Color32) {
+    let (r, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
+    ui.painter().circle_filled(r.center(), 5.0, color);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn link_slot(ui: &mut egui::Ui, name: &str, radio: Option<bool>, idle: bool, up: bool, sig: u8, age_ms: u32, rx: u32, dup: u32) {
     let bars = crate::protocol::parsers::signal_bars(sig);
+    // Nothing ever received: the age only counts from the dongle's startup.
+    let never = rx == 0 && !up;
+    let (color, state) = match (radio, up, never) {
+        (Some(false), _, _) => (theme::FG_MUTED, "no radio"),
+        (_, true, _) => (theme::GREEN, "linked"),
+        (_, false, true) => (theme::FG_MUTED, "not seen"),
+        (_, false, false) if idle => (theme::FG_MUTED, "idle"),
+        (_, false, false) => (theme::RED, "not linked"),
+    };
     ui.horizontal(|ui| {
         ui.label(RichText::new(name).size(13.0));
-        let (r, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-        ui.painter().circle_filled(r.center(), 5.0, if up { theme::GREEN } else { theme::RED });
-        note(ui, if up { "linked" } else { "not linked" });
+        dot(ui, color);
+        note(ui, state);
         signal_bars(ui, bars);
     });
-    note(ui, &format!("Signal {sig}/255, last heard {} s ago", hb_ms / 1000));
-    note(ui, &format!("{rx} packets, {dup} duplicates"));
+    if radio == Some(false) {
+        note(ui, "This dongle has no radio module for it.");
+    } else if never {
+        note(ui, "Nothing received since the dongle started.");
+    } else {
+        note(ui, &format!("Signal {sig}/255, last heard {} s ago", age_ms / 1000));
+        note(ui, &format!("{rx} packets, {dup} duplicates"));
+    }
+}
+
+fn half_link(ui: &mut egui::Ui, name: &str, h: &crate::protocol::parsers::HalfLink) {
+    let seconds = h.age_ms / 1000;
+    let (color, state) = if h.heard_recently() {
+        (theme::GREEN, format!("heard {seconds} s ago"))
+    } else if h.ever_heard() {
+        (theme::FG_MUTED, format!("asleep or out of range, heard {seconds} s ago"))
+    } else {
+        (theme::FG_MUTED, "not seen since the dongle started".to_string())
+    };
+    // An old figure says nothing about the link now.
+    let bars = h.quality().filter(|_| h.heard_recently()).map_or(0, crate::protocol::parsers::signal_bars);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(name).size(13.0));
+        dot(ui, color);
+        signal_bars(ui, bars);
+    });
+    note(ui, &state);
+    if h.ever_heard() {
+        let retries = h.known_retries().map_or("no retry figure yet".to_string(), |q| format!("{q}% retries"));
+        note(ui, &format!("{} frames, {retries}", h.frames));
+    }
+}
+
+fn half_heard(ui: &mut egui::Ui, name: &str, side: Option<&crate::protocol::parsers::HalfBattery>) {
+    let (color, text) = match side {
+        None => (theme::FG_MUTED, "waiting for the dongle".to_string()),
+        Some(s) if s.heard_recently() => (theme::GREEN, format!("heard {} s ago", s.age_ms / 1000)),
+        Some(s) if s.ever_heard() => (theme::FG_MUTED, format!("asleep or out of range, heard {} s ago", s.age_ms / 1000)),
+        Some(_) => (theme::FG_MUTED, "not heard since the dongle started".to_string()),
+    };
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(name).size(13.0));
+        dot(ui, color);
+        note(ui, &text);
+    });
 }
 
 fn battery_side(ui: &mut egui::Ui, name: &str, side: Option<&crate::protocol::parsers::HalfBattery>) {

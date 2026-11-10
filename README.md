@@ -17,14 +17,15 @@ Built with [Rust](https://www.rust-lang.org/) and [egui](https://github.com/emil
 | | |
 |---|---|
 | ![Layout](docs/screenshots/layout.png) | ![Behaviors](docs/screenshots/behaviors.png) |
-| ![Typing](docs/screenshots/typing.png) | |
+| ![Typing](docs/screenshots/typing.png) | ![Practice](docs/screenshots/practice.png) |
 
 - **Keymap**: click a key to select it, double-click to change it, drag to swap two keys. Undo and redo, copy and paste, type to assign, find a key, heatmap, and labels for QWERTY, AZERTY, QWERTZ, Dvorak, Colemak and more.
 - **Check**: finds what is wrong in a keymap, such as a key that does nothing or a layer no key reaches, and takes you to it.
 - **Layout**: draw the shape of a keyboard. Drag, duplicate, mirror and snap keys to a grid, or start from the models that come with the firmware. Import and export as JSON.
 - **Behaviors**: macros, tap dance, combos, key overrides, leader keys and layer settings. Macros and tap dances show which keys use them.
+- **Practice**: learn touch typing on your own keymap. Letters come in one at a time, the most frequent first, as on keybr.com; the next key, its finger and the layer key to hold light up on your keyboard. Stars, levels, combos, a daily goal, streaks and badges keep it a game.
 - **Typing**: hand balance, finger load, row usage, busiest keys, same-finger pairs and speed, from the counters in the keyboard.
-- **Device**: status, radio link and battery through the dongle, pairing, backup and restore, OTA update, ESP32 flasher, matrix test and reset.
+- **Device**: status, radio link and battery of each half through the dongle, pairing, backup and restore, OTA update, ESP32 flasher, matrix test and reset.
 - **Demo mode**: try everything without a keyboard with `--demo`. Nothing is sent anywhere.
 
 ## Download
@@ -39,7 +40,7 @@ The [web version](https://mornepousse.github.io/KeSp_controller/) talks to the k
 
 1. Plug in the keyboard or its dongle over USB.
 2. Start KeSp Controller. The desktop app connects by itself. In the browser, press **Connect** and choose the port.
-3. Use the tabs: Keymap, Layout, Behaviors, Typing, Device.
+3. Use the tabs: Keymap, Layout, Behaviors, Typing, Practice, Device.
 
 ## Build from source
 

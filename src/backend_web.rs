@@ -641,7 +641,7 @@ impl Shared {
                 if self.link.borrow().is_dongle {
                     match self.send(cmd::RF_PAIR_RESET, &[]).await {
                         Ok(_) => {
-                            tx.send(BgMsg::Status("Paired halves cleared".into()));
+                            tx.send(BgMsg::Status("Pairing forgotten".into()));
                             self.fetch_pair_list().await;
                         }
                         Err(e) => tx.send(BgMsg::StatusError(format!("RF_PAIR_RESET: {e}"))),
@@ -679,7 +679,7 @@ impl Shared {
                     }
                 }
                 if remaining == 0 {
-                    tx.send(BgMsg::PairResult(Err("Timeout — no half completed the handshake in 30 s".into())));
+                    tx.send(BgMsg::PairResult(Err("Timeout — nothing completed the handshake in 30 s".into())));
                 } else {
                     self.pair_later(remaining, baseline);
                 }
