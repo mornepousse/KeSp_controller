@@ -650,9 +650,17 @@ pub fn parse_ko_entries(payload: &[u8]) -> Vec<KoEntry> {
     payload
         .get(1..)
         .unwrap_or(&[])
-        .chunks_exact(5)
+        .as_chunks::<5>()
+        .0
+        .iter()
         .take(count)
-        .map(|e| KoEntry { index: e[0], trigger_key: e[1], trigger_mod: e[2], result_key: e[3], result_mod: e[4] })
+        .map(|&[index, trigger_key, trigger_mod, result_key, result_mod]| KoEntry {
+            index,
+            trigger_key,
+            trigger_mod,
+            result_key,
+            result_mod,
+        })
         .collect()
 }
 
