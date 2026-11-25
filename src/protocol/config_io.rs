@@ -52,6 +52,9 @@ pub struct MacroConfig {
     pub name: String,
     /// Steps as "kc:mod,kc:mod,..." hex string
     pub steps: String,
+    /// Keys pressed together. Absent from files saved by older versions.
+    #[serde(default)]
+    pub keys: Vec<u8>,
 }
 
 impl KeyboardConfig {
@@ -61,5 +64,34 @@ impl KeyboardConfig {
 
     pub fn from_json(json: &str) -> Result<Self, String> {
         serde_json::from_str(json).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_macro_of_keys_survives_a_save_and_reload() {
+        let c = KeyboardConfig {
+            version: 1,
+            layer_names: vec![],
+            keymaps: vec![],
+            tap_dances: vec![],
+            combos: vec![],
+            key_overrides: vec![],
+            leaders: vec![],
+            macros: vec![MacroConfig { slot: 0, name: "Copier".into(), steps: String::new(), keys: vec![0xE0, 0x06] }],
+        };
+        let back = KeyboardConfig::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(back.macros[0].keys, vec![0xE0, 0x06]);
+    }
+
+    #[test]
+    fn a_file_from_an_older_version_still_loads() {
+        let old = r#"{"version":1,"layer_names":[],"keymaps":[],"tap_dances":[],"combos":[],
+            "key_overrides":[],"leaders":[],"macros":[{"slot":0,"name":"m","steps":"06:00"}]}"#;
+        let c = KeyboardConfig::from_json(old).unwrap();
+        assert!(c.macros[0].keys.is_empty());
     }
 }

@@ -170,6 +170,19 @@ pub fn macro_add_seq_payload(slot: u8, name: &str, steps_hex: &str) -> Vec<u8> {
     payload
 }
 
+/// Build MACRO_ADD payload: [slot][name_len][name...][keys: 6 bytes]. The firmware
+/// reads the keys at this exact place, so they are always padded to 6.
+pub fn macro_add_payload(slot: u8, name: &str, keys: &[u8]) -> Vec<u8> {
+    let name_bytes = name.as_bytes();
+    let name_len = name_bytes.len().min(255);
+    let mut payload = vec![slot, name_len as u8];
+    payload.extend_from_slice(&name_bytes[..name_len]);
+    for i in 0..6 {
+        payload.push(keys.get(i).copied().unwrap_or(0));
+    }
+    payload
+}
+
 /// Build MACRO_DELETE payload: [slot]
 pub fn macro_delete_payload(slot: u8) -> Vec<u8> {
     vec![slot]
@@ -364,6 +377,14 @@ pub fn parse_all_kr(data: &[u8]) -> Vec<KrResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn macro_add_pads_its_keys_to_six() {
+        assert_eq!(
+            macro_add_payload(1, "Ab", &[0xE0, 0x19]),
+            vec![1, 2, b'A', b'b', 0xE0, 0x19, 0, 0, 0, 0]
+        );
+    }
 
     #[test]
     fn err_unknown_is_a_capability_statement_not_a_failure() {

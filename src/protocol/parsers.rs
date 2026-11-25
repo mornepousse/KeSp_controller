@@ -345,6 +345,8 @@ impl MacroStep {
 pub struct MacroEntry {
     pub slot: u8,
     pub name: String,
+    /// Keys pressed together, for macros made that way (MACRO_ADD).
+    pub keys: Vec<u8>,
     pub steps: Vec<MacroStep>,
 }
 
@@ -444,6 +446,7 @@ pub fn parse_macro_lines(lines: &[String]) -> Vec<MacroEntry> {
         result.push(MacroEntry {
             slot,
             name,
+            keys: Vec::new(),
             steps,
         });
     }
@@ -457,11 +460,14 @@ pub fn parse_macro_lines(lines: &[String]) -> Vec<MacroEntry> {
 // These functions parse the *payload* bytes extracted from a KR response frame.
 // They produce the same data types as the text parsers above.
 
+/// Tap dance slots of the firmware (`TAP_DANCE_MAX_SLOTS`).
+pub const TD_SLOTS: usize = 16;
+
 /// Parse TD_LIST (0x51) binary payload.
 /// Format: [count:u8] then count entries of [idx:u8][a1:u8][a2:u8][a3:u8][a4:u8].
 /// Returns Vec<[u16; 4]> with 8 slots (same shape as parse_td_lines).
 pub fn parse_td_binary(payload: &[u8]) -> Vec<[u16; 4]> {
-    let mut result = vec![[0u16; 4]; 8];
+    let mut result = vec![[0u16; 4]; TD_SLOTS];
 
     // Need at least 1 byte for count
     let has_count = !payload.is_empty();
@@ -487,7 +493,7 @@ pub fn parse_td_binary(payload: &[u8]) -> Vec<[u16; 4]> {
         let action3 = payload[offset + 3] as u16;
         let action4 = payload[offset + 4] as u16;
 
-        let valid_index = idx < 8;
+        let valid_index = idx < TD_SLOTS;
         if valid_index {
             result[idx] = [action1, action2, action3, action4];
         }
@@ -625,6 +631,104 @@ pub fn parse_ko_binary(payload: &[u8]) -> Vec<[u8; 4]> {
     }
 
     result
+}
+
+/// One key override, with the firmware slot it lives in: the list skips empty
+/// slots, so its position in the list says nothing about its slot.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KoEntry {
+    pub index: u8,
+    pub trigger_key: u8,
+    pub trigger_mod: u8,
+    pub result_key: u8,
+    pub result_mod: u8,
+}
+
+/// Parse KO_LIST (0x92), keeping each override's slot.
+pub fn parse_ko_entries(payload: &[u8]) -> Vec<KoEntry> {
+    let count = payload.first().copied().unwrap_or(0) as usize;
+    payload
+        .get(1..)
+        .unwrap_or(&[])
+        .chunks_exact(5)
+        .take(count)
+        .map(|e| KoEntry { index: e[0], trigger_key: e[1], trigger_mod: e[2], result_key: e[3], result_mod: e[4] })
+        .collect()
+}
+
+/// Parse LIST_LAYOUTS (0x21): [count] then per layer [index][name_len][name].
+pub fn parse_layer_names(payload: &[u8]) -> Vec<String> {
+    let count = payload.first().copied().unwrap_or(0) as usize;
+    let mut names = Vec::with_capacity(count);
+    let mut i = 1;
+    for _ in 0..count {
+        let Some(&len) = payload.get(i + 1) else { break };
+        let end = i + 2 + len as usize;
+        let Some(name) = payload.get(i + 2..end) else { break };
+        names.push(String::from_utf8_lossy(name).to_string());
+        i = end;
+    }
+    names
+}
+
+#[cfg(test)]
+mod firmware_list_tests {
+    use super::*;
+
+    #[test]
+    fn layer_names_read_as_a_real_dongle_sends_them() {
+        let p = b"\x02\x00\x04MAIN\x01\x03NAV";
+        assert_eq!(parse_layer_names(p), vec!["MAIN".to_string(), "NAV".to_string()]);
+        // Cut short: what is complete still comes through.
+        assert_eq!(parse_layer_names(b"\x02\x00\x04MAIN\x01\x09NA"), vec!["MAIN".to_string()]);
+        assert!(parse_layer_names(&[]).is_empty());
+    }
+
+    #[test]
+    fn overrides_keep_their_slot_when_the_list_has_holes() {
+        // Slots 1 and 4 used, as bin_cmd_ko_list sends them.
+        let p = [2, 1, 0x2A, 0x02, 0x4C, 0, 4, 0x04, 0, 0x05, 0];
+        let e = parse_ko_entries(&p);
+        assert_eq!(e.len(), 2);
+        assert_eq!((e[0].index, e[0].trigger_key, e[0].trigger_mod, e[0].result_key), (1, 0x2A, 0x02, 0x4C));
+        assert_eq!(e[1].index, 4);
+    }
+
+    #[test]
+    fn a_short_override_list_stops_without_a_panic() {
+        assert!(parse_ko_entries(&[]).is_empty());
+        assert_eq!(parse_ko_entries(&[3, 0, 1, 2, 3, 4, 9]).len(), 1);
+    }
+
+    #[test]
+    fn tap_dances_in_the_upper_slots_are_kept() {
+        let p = [1, 15, 0x04, 0x05, 0x06, 0x07];
+        let t = parse_td_binary(&p);
+        assert_eq!(t.len(), 16);
+        assert_eq!(t[15], [4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn a_tap_dance_slot_past_the_firmware_range_is_ignored() {
+        let t = parse_td_binary(&[1, 16, 1, 2, 3, 4]);
+        assert!(t.iter().flatten().all(|&a| a == 0));
+    }
+
+    #[test]
+    fn leader_entries_follow_the_firmware_layout() {
+        // idx 2, sequence S I, sends Ctrl+S; idx 5, sequence Q, sends Esc.
+        let p = [2, 2, 2, 0x16, 0x0C, 0x16, 0x01, 5, 1, 0x14, 0x29, 0];
+        let l = parse_leader_binary(&p);
+        assert_eq!(l.len(), 2);
+        assert_eq!((l[0].index, l[0].sequence.clone(), l[0].result, l[0].result_mod), (2, vec![0x16, 0x0C], 0x16, 1));
+        assert_eq!((l[1].index, l[1].sequence.clone(), l[1].result), (5, vec![0x14], 0x29));
+    }
+
+    #[test]
+    fn combo_entries_follow_the_firmware_layout() {
+        let c = parse_combo_binary(&[1, 3, 2, 1, 2, 9, 0x29]);
+        assert_eq!((c[0].index, c[0].r1, c[0].c1, c[0].r2, c[0].c2, c[0].result), (3, 2, 1, 2, 9, 0x29));
+    }
 }
 
 /// Parse BT_QUERY (0x80) binary payload.
@@ -796,7 +900,7 @@ pub fn parse_macros_binary(payload: &[u8]) -> Vec<MacroEntry> {
             break;
         }
 
-        // Skip the raw keys bytes
+        let keys = payload[offset..offset + keys_len].to_vec();
         offset += keys_len;
 
         // Read step_count + steps
@@ -831,11 +935,31 @@ pub fn parse_macros_binary(payload: &[u8]) -> Vec<MacroEntry> {
         result.push(MacroEntry {
             slot,
             name,
+            keys,
             steps,
         });
     }
 
     result
+}
+
+#[cfg(test)]
+mod real_macro_tests {
+    use super::*;
+
+    /// LIST_MACROS as a real dongle answered it (firmware v4.2.0-beta.3).
+    const REAL: &[u8] = b"\x02\x00\x00\x15\x06Copier\x02\xe0\x06\x00\x01\x00\x16\x06Coller\x02\xe0\x19\x00";
+
+    #[test]
+    fn macros_made_of_keys_pressed_together_keep_their_keys() {
+        let m = parse_macros_binary(REAL);
+        assert_eq!(m.len(), 2);
+        assert_eq!((m[0].slot, m[0].name.as_str()), (0, "Copier"));
+        assert_eq!(m[0].keys, vec![0xE0, 0x06]);
+        assert!(m[0].steps.is_empty());
+        assert_eq!((m[1].slot, m[1].name.as_str()), (1, "Coller"));
+        assert_eq!(m[1].keys, vec![0xE0, 0x19]);
+    }
 }
 
 /// Parse KEYSTATS_BIN (0x40) binary payload.
@@ -892,21 +1016,57 @@ pub fn parse_keystats_binary(payload: &[u8]) -> (Vec<Vec<u32>>, u32) {
 // Dongle parsers (per CDC_DONGLE_INTEGRATION.md, opcodes 0xB2–0xB6)
 // =============================================================================
 
-/// RF link snapshot from `RF_STATUS` (0xB3). 27 bytes, idempotent.
-/// Layout: [flags][sig_L][sig_R][hb_age_L u32 LE][hb_age_R u32 LE]
-///         [pkt_rx_L u32 LE][pkt_rx_R u32 LE][pkt_dup_L u32 LE][pkt_dup_R u32 LE]
+/// RF link snapshot from `RF_STATUS` (0xB3). The dongle's two slots are the
+/// keyboard (both halves share it) and the Conchodytes mouse, not the two halves:
+/// the firmware's `sig_left` / `sig_right` names are older than that.
+/// Layout: [flags][sig_kbd][sig_mouse][age_kbd u32 LE][age_mouse u32 LE]
+///         [pkt_rx_kbd u32 LE][pkt_rx_mouse u32 LE][pkt_dup_kbd u32 LE][pkt_dup_mouse u32 LE]
+/// The firmware adds diagnostic counters after byte 27, then each half at 51..68.
 #[derive(Debug, Clone, Default)]
 pub struct RfStatus {
-    pub link_left: bool,         // flags bit0
-    pub link_right: bool,        // flags bit1
-    pub sig_left: u8,            // 0..=255 rf_signal_q255 (0 = down)
-    pub sig_right: u8,
-    pub hb_age_left_ms: u32,
-    pub hb_age_right_ms: u32,
-    pub pkt_rx_left: u32,
-    pub pkt_rx_right: u32,
-    pub pkt_dup_left: u32,
-    pub pkt_dup_right: u32,
+    pub link_kbd: bool,          // flags bit0
+    pub link_mouse: bool,        // flags bit1
+    pub sig_kbd: u8,             // 0..=255 rf_signal_q255 (0 = down)
+    pub sig_mouse: u8,
+    pub age_kbd_ms: u32,
+    pub age_mouse_ms: u32,
+    pub pkt_rx_kbd: u32,
+    pub pkt_rx_mouse: u32,
+    pub pkt_dup_kbd: u32,
+    pub pkt_dup_mouse: u32,
+    /// Radio modules that answered at startup (keyboard's, mouse's), flags bits 2
+    /// and 3. None on a 27-byte reply, where those bits were reserved.
+    pub radios_present: Option<(bool, bool)>,
+    /// Left then right half. None on a firmware that doesn't count them separately.
+    pub halves: Option<[HalfLink; 2]>,
+}
+
+/// `link_q` before a half's first STATUS frame: unknown, not 0 %.
+pub const HALF_LINK_Q_UNKNOWN: u8 = 0xFF;
+
+/// One half as the dongle last heard it, from RF_STATUS bytes 51..68.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct HalfLink {
+    pub age_ms: u32,
+    pub frames: u32,
+    /// Retransmission percentage it last reported (100 = 3 retries or more per frame).
+    pub link_q: u8,
+}
+
+impl HalfLink {
+    pub fn ever_heard(&self) -> bool { self.age_ms != 0xFFFF_FFFF }
+    pub fn heard_recently(&self) -> bool { self.ever_heard() && self.age_ms <= HALF_HEARD_MS }
+    pub fn known_retries(&self) -> Option<u8> {
+        (self.link_q != HALF_LINK_Q_UNKNOWN).then_some(self.link_q.min(100))
+    }
+    /// The retry factor of the firmware's `rf_signal_q255`, on 0..=255. Its age factor is
+    /// left out: a half at rest sends nothing, which says nothing about its link.
+    pub fn quality(&self) -> Option<u8> {
+        self.known_retries().map(|q| {
+            let q = q as u32;
+            (255 * (100 - q) / 100) as u8
+        })
+    }
 }
 
 /// Map a 0..=255 signal value to a 0..=4 bar count per the spec.
@@ -927,16 +1087,23 @@ pub fn parse_rf_status(payload: &[u8]) -> Result<RfStatus, String> {
     let u32_le = |o: usize| u32::from_le_bytes(payload[o..o + 4].try_into().unwrap());
     let flags = payload[0];
     Ok(RfStatus {
-        link_left: flags & 0x01 != 0,
-        link_right: flags & 0x02 != 0,
-        sig_left: payload[1],
-        sig_right: payload[2],
-        hb_age_left_ms: u32_le(3),
-        hb_age_right_ms: u32_le(7),
-        pkt_rx_left: u32_le(11),
-        pkt_rx_right: u32_le(15),
-        pkt_dup_left: u32_le(19),
-        pkt_dup_right: u32_le(23),
+        link_kbd: flags & 0x01 != 0,
+        link_mouse: flags & 0x02 != 0,
+        sig_kbd: payload[1],
+        sig_mouse: payload[2],
+        age_kbd_ms: u32_le(3),
+        age_mouse_ms: u32_le(7),
+        pkt_rx_kbd: u32_le(11),
+        pkt_rx_mouse: u32_le(15),
+        pkt_dup_kbd: u32_le(19),
+        pkt_dup_mouse: u32_le(23),
+        radios_present: (payload.len() > 27).then_some((flags & 0x04 != 0, flags & 0x08 != 0)),
+        halves: (payload.len() >= 69).then(|| {
+            [
+                HalfLink { age_ms: u32_le(51), frames: u32_le(59), link_q: payload[67] },
+                HalfLink { age_ms: u32_le(55), frames: u32_le(63), link_q: payload[68] },
+            ]
+        }),
     })
 }
 
@@ -981,6 +1148,11 @@ pub fn parse_pair_start(payload: &[u8]) -> Result<PairStartResp, String> {
     })
 }
 
+/// A half at rest reports every `RF_BATT_PERIOD_MS` (30 s, firmware `rf_slot.h`):
+/// beyond two periods it is asleep or out of range. The battery sample's age is
+/// the only thing the dongle tells about each half separately.
+pub const HALF_HEARD_MS: u32 = 60000;
+
 /// Battery slot of `BATTERY` (0xB6), 7 bytes per side. Sentinels:
 /// `batt_dv == 0xFF` → never seen ; `age_ms == 0xFFFFFFFF` → no sample since boot.
 #[derive(Debug, Clone, Copy, Default)]
@@ -993,7 +1165,9 @@ pub struct HalfBattery {
 
 impl HalfBattery {
     pub fn has_value(&self) -> bool { self.batt_dv != 0xFF && self.age_ms != 0xFFFF_FFFF }
-    pub fn is_stale(&self) -> bool { self.age_ms != 0xFFFF_FFFF && self.age_ms > 60_000 }
+    pub fn is_stale(&self) -> bool { self.age_ms != 0xFFFF_FFFF && self.age_ms > HALF_HEARD_MS }
+    pub fn ever_heard(&self) -> bool { self.age_ms != 0xFFFF_FFFF }
+    pub fn heard_recently(&self) -> bool { self.ever_heard() && !self.is_stale() }
 }
 
 /// `BATTERY` (0xB6) response: 14 bytes = 2 × `HalfBattery` (LEFT, RIGHT).
@@ -1022,6 +1196,122 @@ pub fn parse_battery(payload: &[u8]) -> Result<Battery, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// RF_STATUS as the real dongle answered it (firmware v4.2.0-beta.3): keyboard
+    /// linked, no mouse, both radio modules mounted.
+    fn real_rf_status() -> Vec<u8> {
+        let mut p = vec![0x0D, 184, 0];
+        for v in [415u32, 755079, 7963, 0, 0, 0] {
+            p.extend_from_slice(&v.to_le_bytes());
+        }
+        p.extend_from_slice(&[0, 0, 0, 0, 0x0F, 0, 0, 0, 0xE5, 0x05]);
+        p.extend_from_slice(&[0; 14]);
+        p
+    }
+
+    /// RF_STATUS as the real dongle answers once its firmware counts each half.
+    fn real_rf_status_with_halves() -> Vec<u8> {
+        let mut p = vec![0x0C, 0, 0];
+        for v in [3522u32, 381312, 881, 0, 0, 0] {
+            p.extend_from_slice(&v.to_le_bytes());
+        }
+        p.extend_from_slice(&[0, 0, 0, 0, 0x10, 0, 0, 0, 0xAE, 0, 0, 0]);
+        p.extend_from_slice(&[0; 12]);
+        for v in [3521u32, 20605, 525, 356] {
+            p.extend_from_slice(&v.to_le_bytes());
+        }
+        p.extend_from_slice(&[0, 0]);
+        p
+    }
+
+    #[test]
+    fn each_half_has_its_own_link_when_the_firmware_counts_them() {
+        let p = real_rf_status_with_halves();
+        assert_eq!(p.len(), 69);
+        let [left, right] = parse_rf_status(&p).unwrap().halves.unwrap();
+        assert_eq!((left.age_ms, left.frames, left.link_q), (3521, 525, 0));
+        assert_eq!((right.age_ms, right.frames, right.link_q), (20605, 356, 0));
+    }
+
+    #[test]
+    fn an_older_firmware_gives_no_figures_per_half() {
+        assert!(parse_rf_status(&real_rf_status()).unwrap().halves.is_none());
+        assert!(parse_rf_status(&real_rf_status_with_halves()[..68]).unwrap().halves.is_none());
+    }
+
+    #[test]
+    fn the_quality_of_a_half_is_the_firmwares_retry_factor() {
+        // Same values as the firmware's test_rf_signal_q255.c, age left out.
+        let quality = |link_q| HalfLink { age_ms: 0, frames: 1, link_q }.quality();
+        assert_eq!(quality(0), Some(255));
+        assert_eq!(quality(50), Some(127));
+        assert_eq!(quality(75), Some(63));
+        assert_eq!(quality(100), Some(0));
+        assert_eq!(quality(200), Some(0));
+    }
+
+    #[test]
+    fn a_half_that_never_reported_has_no_quality_rather_than_a_perfect_one() {
+        let h = HalfLink { age_ms: 500, frames: 3, link_q: HALF_LINK_Q_UNKNOWN };
+        assert_eq!(h.quality(), None);
+        assert!(h.heard_recently());
+    }
+
+    #[test]
+    fn a_silent_half_is_told_from_one_never_seen() {
+        let half = |age_ms| HalfLink { age_ms, frames: 9, link_q: 0 };
+        assert!(half(HALF_HEARD_MS).heard_recently());
+        assert!(!half(HALF_HEARD_MS + 1).heard_recently());
+        assert!(half(HALF_HEARD_MS + 1).ever_heard());
+        assert!(!half(u32::MAX).ever_heard());
+        assert!(!half(u32::MAX).heard_recently());
+    }
+
+    #[test]
+    fn the_two_radio_slots_are_the_keyboard_and_the_mouse() {
+        let s = parse_rf_status(&real_rf_status()).unwrap();
+        assert_eq!(real_rf_status().len(), 51);
+        assert!(s.link_kbd);
+        assert!(!s.link_mouse);
+        assert_eq!((s.sig_kbd, s.sig_mouse), (184, 0));
+        assert_eq!(s.age_kbd_ms, 415);
+        assert_eq!((s.pkt_rx_kbd, s.pkt_rx_mouse), (7963, 0));
+        assert_eq!(s.radios_present, Some((true, true)));
+    }
+
+    #[test]
+    fn a_short_rf_status_says_nothing_about_the_radio_modules() {
+        // Bits 2 and 3 were reserved in this form: 0 doesn't mean "not mounted".
+        let s = parse_rf_status(&real_rf_status()[..27]).unwrap();
+        assert!(s.link_kbd);
+        assert_eq!(s.radios_present, None);
+    }
+
+    #[test]
+    fn a_mounted_radio_is_told_apart_from_a_missing_one() {
+        let mut p = real_rf_status();
+        p[0] = 0x05;
+        assert_eq!(parse_rf_status(&p).unwrap().radios_present, Some((true, false)));
+    }
+
+    #[test]
+    fn a_half_counts_as_heard_for_two_battery_periods() {
+        let half = |age_ms| HalfBattery { batt_dv: 37, soc_pct: 13, charging: 0, age_ms };
+        assert!(half(675).heard_recently());
+        // A right half at rest only speaks every 30 s.
+        assert!(half(31_000).heard_recently());
+        assert!(half(HALF_HEARD_MS).heard_recently());
+        assert!(!half(HALF_HEARD_MS + 1).heard_recently());
+        assert!(!half(u32::MAX).heard_recently());
+    }
+
+    #[test]
+    fn a_half_without_a_gauge_is_still_heard() {
+        // Unknown voltage, fresh sample: it has no reading but it did speak.
+        let h = HalfBattery { batt_dv: 0xFF, soc_pct: 0xFF, charging: 0xFF, age_ms: 500 };
+        assert!(!h.has_value());
+        assert!(h.heard_recently());
+    }
 
     // Build a v2 KEYMAP_GET payload: [layer][keycodes LE], value = r*cols+c.
     fn make_payload(layer: u8, rows: usize, cols: usize) -> Vec<u8> {
