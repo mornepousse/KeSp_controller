@@ -1,5 +1,5 @@
 {
-  description = "KeSp split keyboard configurator — Slint UI";
+  description = "KeSp split keyboard configurator — egui";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -10,7 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "2.2.0";
+        version = "3.0.0-beta.3";
 
         # Binaries come from the GitHub release assets — public, no token.
         # URL format: https://github.com/<owner>/<repo>/releases/download/v<version>/<file>
@@ -25,11 +25,11 @@
         assets = {
           x86_64-linux = {
             url = "${ghRelease}/v${version}/KeSp_controller-linux-x86_64";
-            hash = "sha256-GtafNfIEj81rL+LXDdC3PalatJy3t9GgXbaGkIBxAwM=";
+            hash = "sha256-Y9eO9iyPf1RAn5Ph/JQHjdiIzWURfv2yrTZiOKqlDcI=";
           };
         };
 
-        # Runtime dependencies for Slint UI
+        # Runtime dependencies for the egui UI (eframe: winit + glow)
         runtimeLibs = with pkgs; [
           fontconfig
           libxkbcommon

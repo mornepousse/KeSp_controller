@@ -29,8 +29,10 @@ bâtir l'URL de l'artefact et son `hash` adresse le contenu — or le hash ne pe
 après vérification :
 
 ```bash
+# le flake télécharge depuis la release GITHUB (pas le registre GitLab) :
+# créer d'abord la release GitHub avec les binaires de la CI GitLab
 nix store prefetch-file --json \
-  "https://gitlab.com/api/v4/projects/harrael%2FKeSp_controller/packages/generic/kesp-controller/vX.Y.Z/KeSp_controller-linux-x86_64"
+  "https://github.com/mornepousse/KeSp_controller/releases/download/vX.Y.Z/KeSp_controller-linux-x86_64"
 # puis: version ET hash dans flake.nix, et `nix build .#default` doit passer
 ```
 
